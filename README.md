@@ -1,6 +1,6 @@
 <h1 align="center">🔀 tinyresult</h1>
 
-A tiny, zero-dependency library for handling synchronous and asynchronous results with robust error handling, inspired by Rust's `Result` type.
+A tiny, zero-dependency library for handling synchronous and asynchronous results with robust error handling.
 
 <p align="center">
 	<a href="http://npmjs.com/package/@jaydenfyi/tinyresult"><img alt="📦 npm version" src="https://img.shields.io/npm/v/@jaydenfyi/tinyresult?color=21bb42&label=%F0%9F%93%A6%20npm" /></a>
