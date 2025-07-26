@@ -1,4 +1,4 @@
-# tinyresult
+<h1 align="center">🔀 tinyresult</h1>
 
 A tiny, zero-dependency library for handling synchronous and asynchronous results with robust error handling, inspired by Rust's `Result` type.
 
