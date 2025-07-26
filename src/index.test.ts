@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { Result, AsyncResult } from "./index"
+import { Result, AsyncResult } from "./result"
 
 describe(Result, () => {
     test("should be a constructor", () => {
