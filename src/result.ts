@@ -583,4 +583,4 @@ class AsyncResultImplementation<T, E = unknown>
 export const Result: ResultConstructor =
   ResultImplementation as unknown as ResultConstructor;
 export const AsyncResult: AsyncResultConstructor =
-  AsyncResultImplementation as unknown as AsyncResultConstructor;
+  AsyncResultImplementation;
