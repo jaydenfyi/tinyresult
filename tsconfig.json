@@ -33,6 +33,8 @@
     "declarationMap": true,
 
     /* If your code runs in the DOM: */
-    "lib": ["es2022", "dom"]
-  }
+    "lib": ["es2022", "dom"],
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "coverage", "**/*.test.ts"]
 }
