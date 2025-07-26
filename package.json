@@ -1,6 +1,6 @@
 {
   "name": "@jaydenfyi/tinyresult",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A tiny library for handling synchronous and asynchronous results with error handling.",
   "main": "dist/index.js",
   "module": "dist/index.js",
