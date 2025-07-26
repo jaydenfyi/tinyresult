@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     /* Base Options: */
-    "esModuleInterop": true,
     "skipLibCheck": true,
     "target": "es2022",
     "allowJs": true,
@@ -15,9 +14,6 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "strictNullChecks": true,
-    // "strictFunctionTypes": true,
-    // "strictBindCallApply": true,
-    // "strictPropertyInitialization": true,
     "exactOptionalPropertyTypes": true,
 
     /* If transpiling with TypeScript: */
