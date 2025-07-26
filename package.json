@@ -3,6 +3,7 @@
 	"version": "0.0.1",
 	"description": "A tiny library for handling synchronous and asynchronous results with error handling.",
 	"scripts": {
+		"build": "tsc",
 		"test": "vitest",
 		"test:coverage": "vitest run --coverage"
 	},
