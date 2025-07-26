@@ -1,4 +1,4 @@
-export * from "./result";
+export * from "./result.js";
 export type {
   AsyncResult,
   Result,
@@ -9,4 +9,4 @@ export type {
   ResultConstructor,
   ResultLike,
   ResultPrototype,
-} from "./types";
+} from "./types.js";

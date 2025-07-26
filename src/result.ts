@@ -9,7 +9,7 @@ import type {
   Result as ResultType,
   ResultConstructor,
   ResultLike,
-} from "./types";
+} from "./types.js";
 
 export type { ResultType, AsyncResultType, ResultLike, OkResult, ErrorResult };
 
