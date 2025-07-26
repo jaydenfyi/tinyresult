@@ -13,11 +13,11 @@ A tiny, zero-dependency library for handling synchronous and asynchronous result
 
 ## Key Features
 
-- **Type-Safe**: Leverages TypeScript to ensure that you handle both success and failure cases.
-- **Seamless Sync/Async Integration**: Provides `Result` for synchronous operations and `AsyncResult` for promise-based workflows, with seamless interoperability between them.
-- **Fluent & Chainable API**: A rich set of methods like `map`, `flatMap`, and `match` make result handling clean and expressive, whether your code is synchronous or asynchronous.
-- **Familiar API**: Heavily inspired by existing ECMAScript built-ins, expoosing methods like `try`, `map`, `flatMap`, `catch`, and `finally` for an easy learning curve.
-- **Zero-Dependency**: Lightweight with no external dependencies.
+- 🛡️ **Type-Safe**: Leverages TypeScript to ensure that you handle both success and failure cases.
+- 🔄 **Seamless Sync/Async Integration**: Provides `Result` for synchronous operations and `AsyncResult` for promise-based workflows, with seamless interoperability between them.
+- 🔗 **Fluent & Chainable API**: A rich set of methods like `map`, `flatMap`, and `match` make result handling clean and expressive, whether your code is synchronous or asynchronous.
+- 💡 **Familiar API**: Heavily inspired by existing ECMAScript built-ins, exposing methods like `try`, `map`, `flatMap`, `catch`, and `finally` for an easy learning curve.
+- 📦 **Zero-Dependency**: Lightweight with no external dependencies.
 
 ---
 
