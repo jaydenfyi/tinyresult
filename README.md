@@ -6,6 +6,7 @@ A tiny, zero-dependency library for handling synchronous and asynchronous result
 	<a href="http://npmjs.com/package/@jaydenfyi/tinyresult"><img alt="📦 npm version" src="https://img.shields.io/npm/v/@jaydenfyi/tinyresult?color=21bb42&label=%F0%9F%93%A6%20npm" /></a>
 	<a href="https://github.com/Not-Jayden/tinyresult/blob/main/LICENSE.md" target="_blank"><img alt="📝 License: MIT" src="https://img.shields.io/badge/%F0%9F%93%9D_license-MIT-21bb42.svg"></a>
 	<img alt="💪 TypeScript: Strict" src="https://img.shields.io/badge/%F0%9F%92%AA_typescript-strict-21bb42.svg" />
+  <img src="https://img.shields.io/bundlejs/size/%40jaydenfyi%2Ftinyresult"/>
 </p>
 
 ---
