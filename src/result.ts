@@ -1,6 +1,3 @@
-// src/index.ts
-// Runtime implementation for Result and AsyncResult types
-
 import type {
   AsyncResult as AsyncResultType,
   AsyncResultConstructor,
