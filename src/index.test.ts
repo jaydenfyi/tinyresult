@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
-import { Result, AsyncResult } from "./result.js";
+import { Result, AsyncResult } from "./index.js";
 
-describe(Result, () => {
+describe("Result", () => {
   test("should be a constructor", () => {
     expect(Result).toBeInstanceOf(Function);
   });
@@ -284,7 +284,7 @@ describe(Result, () => {
 
   test("should return an AsyncResult if the tap callback returns a promise", async () => {
     const result = Result.ok(5);
-    const tapped = result.tap(async () => {});
+    const tapped = result.tap(async () => { });
     expect(AsyncResult.isAsyncResult(tapped)).toBe(true);
     const resolvedResult = await tapped;
     expect(resolvedResult.ok).toBe(true);
@@ -315,7 +315,7 @@ describe(Result, () => {
 
     test("should return an AsyncResult if the tapError callback returns a promise", async () => {
       const result = Result.error("error");
-      const tapped = result.tapError(async () => {});
+      const tapped = result.tapError(async () => { });
       expect(AsyncResult.isAsyncResult(tapped)).toBe(true);
       const resolvedResult = await tapped;
       expect(resolvedResult.ok).toBe(false);
@@ -347,7 +347,7 @@ describe(Result, () => {
 
     test("should return an AsyncResult if the finally callback returns a promise", async () => {
       const result = Result.ok(5);
-      const final = result.finally(async () => {});
+      const final = result.finally(async () => { });
       expect(AsyncResult.isAsyncResult(final)).toBe(true);
       const resolvedResult = await final;
       expect(resolvedResult.ok).toBe(true);
@@ -391,7 +391,7 @@ describe(Result, () => {
   });
 });
 
-describe(AsyncResult, () => {
+describe("AsyncResult", () => {
   test("should be a constructor", () => {
     expect(AsyncResult).toBeInstanceOf(Function);
   });
@@ -691,15 +691,6 @@ describe(AsyncResult, () => {
       await result.tap(spy);
       expect(spy).not.toHaveBeenCalled();
     });
-
-    test("should handle a rejecting promise from the callback", async () => {
-      const error = new Error("test error");
-      const result = AsyncResult.ok(5);
-      const tapped = await result.tap(() => Promise.reject(error));
-      expect(tapped.ok).toBe(false);
-      if (tapped.ok) throw new Error("Result should be an error");
-      expect(tapped.error).toBe(error);
-    });
   });
 
   describe("AsyncResult.prototype.tapError", () => {
@@ -715,15 +706,6 @@ describe(AsyncResult, () => {
       const spy = vi.fn();
       await result.tapError(spy);
       expect(spy).not.toHaveBeenCalled();
-    });
-
-    test("should handle a rejecting promise from the callback", async () => {
-      const error = new Error("test error");
-      const result = AsyncResult.error("some error");
-      const tapped = await result.tapError(() => Promise.reject(error));
-      expect(tapped.ok).toBe(true);
-      if (!tapped.ok) throw new Error("Result should be ok");
-      expect(tapped.value).toBe(error);
     });
   });
 

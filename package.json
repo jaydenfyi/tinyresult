@@ -2,6 +2,10 @@
   "name": "@jaydenfyi/tinyresult",
   "version": "0.0.3",
   "description": "A tiny library for handling synchronous and asynchronous results with error handling.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaydenfyi/tinyresult.git"
+  },
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",

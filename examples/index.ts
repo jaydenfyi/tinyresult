@@ -1,0 +1,44 @@
+import { Result } from "../src";
+
+const userNames = Result.ok([
+    { id: 1, name: "Alice", age: 30 },
+    { id: 2, name: "Bob", age: 25 },
+    { id: 3, name: "Charlie", age: 16 },
+])
+    .flatMap((users) => {
+        if (users.length === 0) {
+            return Result.error("No users found" as const);
+        }
+
+        if (users.some((user) => user.name === "Bob")) {
+            return Result.error("Bob is not allowed" as const);
+        }
+
+        if (users.some((user) => user.age < 18)) {
+            return Result.error("Some users are under 18" as const);
+        }
+
+        return Result.ok(users);
+    })
+    .tapError((error) => {
+        if (error === "No users found") {
+            console.error("Error: No users found");
+        }
+    })
+    .flatMap((users) => {
+        return Result.ok(users.map((user) => user.name));
+    })
+    .flatMap((names) => {
+        if (names.length === 0) {
+            return Result.error("No user names found" as const);
+        }
+
+        return Result.ok(names);
+    })
+    .match((names) => {
+        console.log("User names:", names);
+        return names;
+    }, (error) => {
+        console.error("Error:", error);
+        throw new Error(error);
+    });

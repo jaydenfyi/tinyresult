@@ -15,8 +15,7 @@ A tiny, zero-dependency library for handling synchronous and asynchronous result
 
 - 🛡️ **Type-Safe**: Leverages TypeScript to ensure that you handle both success and failure cases.
 - 🔄 **Seamless Sync/Async Integration**: Provides `Result` for synchronous operations and `AsyncResult` for promise-based workflows, with seamless interoperability between them.
-- 🔗 **Fluent & Chainable API**: A rich set of methods like `map`, `flatMap`, and `match` make result handling clean and expressive, whether your code is synchronous or asynchronous.
-- 💡 **Familiar API**: Heavily inspired by existing ECMAScript built-ins, exposing methods like `try`, `map`, `flatMap`, `catch`, and `finally` for an easy learning curve.
+- 🛠️ **Familiar, Fluent & Immutable API**: Inspired by ECMAScript built‑ins - use chainable methods like `map`, `flatMap`, `catch` and `finally` to compose workflows cleanly.
 - 📦 **Zero-Dependency**: Lightweight with no external dependencies.
 
 ---
@@ -112,3 +111,9 @@ A promise-like structure for asynchronous operations that resolves to a `Result`
 
 - **`.then()`**: `AsyncResult` is "thenable" and can be awaited directly in async functions.
 - **`.match(onOk, onError)`**: Returns a `Promise` that resolves with the result of `onOk` or `onError`.
+
+## Prior Art & Inspiration
+
+- [neverthrow](https://github.com/supermacro/neverthrow)
+- [ECMAScript Try Operator Proposal](https://github.com/arthurfiorette/proposal-try-operator)
+- [Effect.ts](https://github.com/Effect-TS/effect)

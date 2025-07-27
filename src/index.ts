@@ -15,29 +15,25 @@ type ResultLikeInternal<T, E = unknown> = {
   error?: E;
 };
 
-// ───────────────────────────────────────────────────────────
-// 1) Synchronous Result
-// ───────────────────────────────────────────────────────────
-
 export interface ResultPrototype<T, E> {
   map<U>(callbackFn: (value: T) => PromiseLike<U>): AsyncResult<U, E>;
   map<U>(callbackFn: (value: T) => U): Result<U, E>;
 
   flatMap<U, F = E>(
     callbackFn: (value: T) => PromiseLike<Result<U, F>>,
-  ): AsyncResult<U, F>;
-  flatMap<U, F = E>(callbackFn: (value: T) => Result<U, F>): Result<U, F>;
+  ): AsyncResult<U, E | F>;
+  flatMap<U, F = E>(callbackFn: (value: T) => Result<U, F>): Result<U, E | F>;
 
   mapError<F>(callbackFn: (error: E) => PromiseLike<F>): AsyncResult<T, F>;
   mapError<F>(callbackFn: (error: E) => F): Result<T, F>;
 
   flatMapError<U, F = E>(
     callbackFn: (error: E) => PromiseLike<Result<U, F>>,
-  ): AsyncResult<U, F>;
-  flatMapError<U, F = E>(callbackFn: (error: E) => Result<U, F>): Result<U, F>;
+  ): AsyncResult<T | U, F>;
+  flatMapError<U, F = E>(callbackFn: (error: E) => Result<U, F>): Result<T | U, F>;
 
-  catch<U>(callbackFn: (error: E) => PromiseLike<U>): AsyncResult<U, never>;
-  catch<U>(callbackFn: (error: E) => U): Result<U, never>;
+  catch<U>(callbackFn: (error: E) => PromiseLike<U>): AsyncResult<T | U, never>;
+  catch<U>(callbackFn: (error: E) => U): Result<T | U, never>;
 
   tap(onOk: (value: T) => PromiseLike<void>): AsyncResult<T, E>;
   tap(onOk: (value: T) => void): Result<T, E>;
@@ -72,25 +68,21 @@ export interface ResultConstructor {
   readonly prototype: Result<unknown, unknown>;
 }
 
-// ───────────────────────────────────────────────────────────
-// 2) Asynchronous AsyncResult
-// ───────────────────────────────────────────────────────────
-
 export interface AsyncResultPrototype<T, E> {
   map<U>(callbackFn: (value: T) => U | PromiseLike<U>): AsyncResult<U, E>;
   flatMap<U, F = E>(
     callbackFn: (value: T) => AsyncResult<U, F>,
-  ): AsyncResult<U, F>;
+  ): AsyncResult<U, E | F>;
 
   mapError<F>(callbackFn: (error: E) => PromiseLike<F>): AsyncResult<T, F>;
   mapError<F>(callbackFn: (error: E) => F): AsyncResult<T, F>;
 
-  catch<U>(callbackFn: (error: E) => PromiseLike<U>): AsyncResult<U, never>;
-  catch<U>(callbackFn: (error: E) => U): AsyncResult<U, never>;
+  catch<U>(callbackFn: (error: E) => PromiseLike<U>): AsyncResult<T | U, never>;
+  catch<U>(callbackFn: (error: E) => U): AsyncResult<T | U, never>;
 
   flatMapError<U, F = E>(
     callbackFn: (error: E) => AsyncResult<U, F>,
-  ): AsyncResult<U, F>;
+  ): AsyncResult<T | U, F>;
 
   tap(onOk: (value: T) => void | PromiseLike<void>): AsyncResult<T, E>;
   tapError(onError: (error: E) => void | PromiseLike<void>): AsyncResult<T, E>;
@@ -106,13 +98,9 @@ export interface AsyncResultPrototype<T, E> {
 
 export interface AsyncResult<T, E = unknown>
   extends PromiseLike<Result<T, E>>,
-    AsyncResultPrototype<T, E> {}
+  AsyncResultPrototype<T, E> { }
 
 export interface AsyncResultConstructor {
-  new <T, E = unknown>(
-    executor: (ok: (value: T) => void, err: (error: E) => void) => void,
-  ): AsyncResult<T, E>;
-
   ok<T>(value: T): AsyncResult<T, never>;
   error<E>(error: E): AsyncResult<never, E>;
   try<T, E = unknown>(callbackFn: () => T | Promise<T>): AsyncResult<T, E>;
@@ -120,7 +108,7 @@ export interface AsyncResultConstructor {
     iterable: Iterable<T | AsyncResult<T, E>>,
   ): AsyncResult<T[], E>;
   from<T, E = unknown>(
-    result: ResultLike<T, E> | Promise<ResultLike<T, E>>,
+    result: ResultLike<T, E> | PromiseLike<ResultLike<T, E>>,
   ): AsyncResult<T, E>;
   fromPromise<T, E = unknown>(
     promise: Promise<T>,
@@ -138,14 +126,13 @@ export interface AsyncResultConstructor {
 function isThenable<T = unknown>(value: unknown): value is PromiseLike<T> {
   return (
     value !== null &&
-    typeof value === "object" &&
+    typeof value === "object" || typeof value === "function" &&
     typeof (value as any).then === "function"
   );
 }
 
 export class ResultImplementation<T, E = unknown>
-  implements ResultLikeInternal<T, E>, ResultPrototype<T, E>
-{
+  implements ResultLikeInternal<T, E>, ResultPrototype<T, E> {
   readonly ok: boolean;
   readonly value?: T;
   readonly error?: E;
@@ -210,7 +197,7 @@ export class ResultImplementation<T, E = unknown>
     callbackFn: (value: T) => U | PromiseLike<U>,
   ): Result<U, E> | AsyncResult<U, E> {
     if (!this.ok) {
-      return this as unknown as Result<U, E>;
+      return ResultImplementation.error(this.error!);
     }
 
     const mappedValue = callbackFn(this.value!);
@@ -218,7 +205,7 @@ export class ResultImplementation<T, E = unknown>
       return new AsyncResultImplementation<U, E>((okCallback, errCallback) => {
         Promise.resolve(mappedValue)
           .then(okCallback)
-          .catch((reason) => errCallback(reason as E));
+          .catch(() => { })
       });
     }
 
@@ -233,7 +220,7 @@ export class ResultImplementation<T, E = unknown>
     callbackFn: (value: T) => Result<U, F> | PromiseLike<Result<U, F>>,
   ): Result<U, F> | AsyncResult<U, F> {
     if (!this.ok) {
-      return this as unknown as Result<U, F>;
+      return ResultImplementation.error(this.error! as unknown as F)
     }
 
     const flatMappedResult = callbackFn(this.value!);
@@ -247,11 +234,11 @@ export class ResultImplementation<T, E = unknown>
 
             okCallback(result.value);
           })
-          .catch((reason) => errCallback(reason as F));
+          .catch(() => { })
       });
     }
 
-    return flatMappedResult;
+    return ResultImplementation.from(flatMappedResult);
   }
 
   mapError<F>(callbackFn: (error: E) => PromiseLike<F>): AsyncResult<T, F>;
@@ -260,15 +247,15 @@ export class ResultImplementation<T, E = unknown>
     callbackFn: (error: E) => F | PromiseLike<F>,
   ): Result<T, F> | AsyncResult<T, F> {
     if (this.ok) {
-      return this as unknown as Result<T, F>;
+      return ResultImplementation.ok(this.value!);
     }
 
     const mappedError = callbackFn(this.error!);
     if (isThenable(mappedError)) {
-      return new AsyncResultImplementation<T, F>((okCallback, errCallback) => {
+      return new AsyncResultImplementation<T, F>((_okCallback, errCallback) => {
         Promise.resolve(mappedError)
           .then((newError) => errCallback(newError))
-          .catch((reason) => errCallback(reason as F));
+          .catch(() => { })
       });
     }
 
@@ -277,13 +264,15 @@ export class ResultImplementation<T, E = unknown>
 
   flatMapError<U, F = E>(
     callbackFn: (error: E) => PromiseLike<Result<U, F>>,
-  ): AsyncResult<U, F>;
-  flatMapError<U, F = E>(callbackFn: (error: E) => Result<U, F>): Result<U, F>;
+  ): AsyncResult<T | U, F>;
+  flatMapError<U, F = E>(
+    callbackFn: (error: E) => Result<U, F>,
+  ): Result<T | U, F>;
   flatMapError<U, F = E>(
     callbackFn: (error: E) => Result<U, F> | PromiseLike<Result<U, F>>,
-  ): Result<U, F> | AsyncResult<U, F> {
+  ): Result<T | U, F> | AsyncResult<T | U, F> {
     if (this.ok) {
-      return this as unknown as Result<U, F>;
+      return ResultImplementation.ok(this.value!);
     }
 
     const flatMappedErrorResult = callbackFn(this.error!);
@@ -297,11 +286,11 @@ export class ResultImplementation<T, E = unknown>
 
             okCallback(result.value);
           })
-          .catch((reason) => errCallback(reason as F));
+          .catch(() => { });
       });
     }
 
-    return flatMappedErrorResult;
+    return ResultImplementation.from(flatMappedErrorResult);
   }
 
   catch<U>(callbackFn: (error: E) => PromiseLike<U>): AsyncResult<T | U, never>;
@@ -310,7 +299,7 @@ export class ResultImplementation<T, E = unknown>
     callbackFn: (error: E) => U | PromiseLike<U>,
   ): Result<T | U, never> | AsyncResult<T | U, never> {
     if (this.ok) {
-      return this as unknown as Result<T | U, never>;
+      return ResultImplementation.ok(this.value!);
     }
 
     const caughtValue = callbackFn(this.error!);
@@ -329,7 +318,7 @@ export class ResultImplementation<T, E = unknown>
     onOk: (value: T) => void | PromiseLike<void>,
   ): Result<T, E> | AsyncResult<T, E> {
     if (!this.ok) {
-      return this as Result<T, E>;
+      return ResultImplementation.error(this.error!);
     }
 
     const tapResult = onOk(this.value!);
@@ -337,11 +326,11 @@ export class ResultImplementation<T, E = unknown>
       return new AsyncResultImplementation<T, E>((okCallback, errCallback) => {
         Promise.resolve(tapResult)
           .then(() => okCallback(this.value!))
-          .catch((reason) => errCallback(reason as E));
+          .catch(() => { })
       });
     }
 
-    return this as Result<T, E>;
+    return ResultImplementation.ok(this.value!);
   }
 
   tapError(onError: (error: E) => PromiseLike<void>): AsyncResult<T, E>;
@@ -350,19 +339,21 @@ export class ResultImplementation<T, E = unknown>
     onError: (error: E) => void | PromiseLike<void>,
   ): Result<T, E> | AsyncResult<T, E> {
     if (this.ok) {
-      return this as Result<T, E>;
+      return ResultImplementation.ok(this.value!);
     }
 
     const tapErrorResult = onError(this.error!);
     if (isThenable(tapErrorResult)) {
-      return new AsyncResultImplementation<T, E>((okCallback, errCallback) => {
-        Promise.resolve(tapErrorResult)
-          .then(() => errCallback(this.error!))
-          .catch((reason) => okCallback(reason as T));
-      });
+      return new AsyncResultImplementation<T, E>(
+        (_okCallback, errCallback) => {
+          Promise.resolve(tapErrorResult)
+            .then(() => errCallback(this.error!))
+            .catch(() => { })
+        }
+      );
     }
 
-    return this as Result<T, E>;
+    return ResultImplementation.error(this.error!);
   }
 
   finally(onFinally: () => PromiseLike<void>): AsyncResult<T, E>;
@@ -373,17 +364,20 @@ export class ResultImplementation<T, E = unknown>
     const onFinallyResult = onFinally();
     if (isThenable(onFinallyResult)) {
       return new AsyncResultImplementation<T, E>((okCallback, errCallback) => {
-        Promise.resolve(onFinallyResult).then(() => {
+        Promise.resolve(onFinallyResult).finally(() => {
           if (!this.ok) {
             return errCallback(this.error!);
           }
 
           okCallback(this.value!);
-        });
+        })
+          .catch(() => { });
       });
     }
 
-    return this as Result<T, E>;
+    return this.ok
+      ? ResultImplementation.ok(this.value!)
+      : ResultImplementation.error(this.error!);
   }
 
   match<TValue, TError>(
@@ -421,18 +415,14 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
   }
 
   static try<T, E = unknown>(
-    callbackFn: () => T | Promise<T>,
+    callbackFn: () => T | PromiseLike<T>,
   ): AsyncResult<T, E> {
     return new AsyncResultImplementation<T, E>((ok, err) => {
-      Promise.resolve().then(async () => {
-        try {
-          const result = callbackFn();
-          const value = result instanceof Promise ? await result : result;
-          ok(value);
-        } catch (e) {
-          err(e as E);
-        }
-      });
+      try {
+        Promise.resolve(callbackFn()).then(ok, (reason) => err(reason as E));
+      } catch (e) {
+        err(e as E);
+      }
     });
   }
 
@@ -457,7 +447,7 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 
           ok(allResults.value);
         })
-        .catch((e) => err(e as E));
+        .catch(() => { });
     });
   }
 
@@ -465,15 +455,13 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
     result: ResultLike<T, E> | Promise<ResultLike<T, E>>,
   ): AsyncResult<T, E> {
     return new AsyncResultImplementation<T, E>((ok, err) => {
-      Promise.resolve(result).then((r) => {
-        if (!r.ok) {
-          return err(r.error);
-        }
-
-        ok(r.value);
-      });
+      Promise.resolve(result).then(
+        (r) => (r.ok ? ok(r.value) : err(r.error)),
+        () => { }
+      );
     });
   }
+
 
   static fromPromise<T, E = unknown>(
     promise: Promise<T>,
@@ -515,7 +503,7 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 
         Promise.resolve(callbackFn(result.value))
           .then(ok)
-          .catch((reason) => err(reason as E));
+          .catch(() => { })
       });
     });
   }
@@ -543,13 +531,14 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
   mapError<F>(callbackFn: (error: E) => F | PromiseLike<F>): AsyncResult<T, F> {
     return new AsyncResultImplementation<T, F>((ok, err) => {
       this._promise.then((result) => {
-        if (result.ok) {
-          return ok(result.value);
+        if (!result.ok) {
+          Promise.resolve(callbackFn(result.error))
+            .then(err)
+            .catch(() => { });
+          return;
         }
 
-        Promise.resolve(callbackFn(result.error))
-          .then(err)
-          .catch((reason) => ok(reason as T));
+        ok(result.value);
       });
     });
   }
@@ -576,63 +565,62 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 
   catch<U>(
     callbackFn: (error: E) => U | PromiseLike<U>,
-  ): AsyncResult<U, never> {
-    return new AsyncResultImplementation<U, never>((ok, err) => {
+  ): AsyncResult<T | U, never> {
+    return new AsyncResultImplementation<T | U, never>((ok) => {
       this._promise.then((result) => {
         if (result.ok) {
-          return ok(result.value as unknown as U);
+          return ok(result.value);
         }
 
         Promise.resolve(callbackFn(result.error))
           .then(ok)
-          .catch((reason) => {
-            throw reason;
-          });
+          .catch(() => { });
       });
     });
   }
 
   tap(onOk: (value: T) => void | PromiseLike<void>): AsyncResult<T, E> {
     return new AsyncResultImplementation<T, E>((ok, err) => {
-      this._promise.then((result) => {
+      this._promise.then(result => {
         if (!result.ok) {
-          return err(result.error);
+          err(result.error)
+          return
         }
 
         Promise.resolve(onOk(result.value))
           .then(() => ok(result.value))
-          .catch((reason) => err(reason as E));
-      });
-    });
+          .catch(() => { })
+      })
+    })
   }
 
   tapError(onError: (error: E) => void | PromiseLike<void>): AsyncResult<T, E> {
     return new AsyncResultImplementation<T, E>((ok, err) => {
-      this._promise.then((result) => {
+      this._promise.then(result => {
         if (result.ok) {
-          return ok(result.value);
+          ok(result.value)
+          return
         }
 
         Promise.resolve(onError(result.error))
           .then(() => err(result.error))
-          .catch((reason) => ok(reason as T));
-      });
-    });
+          .catch(() => { })
+      })
+    })
   }
 
   finally(onFinally: () => void | PromiseLike<void>): AsyncResult<T, E> {
     return new AsyncResultImplementation<T, E>((ok, err) => {
-      this._promise.then((result) => {
-        Promise.resolve(onFinally())
-          .then(() => {
-            if (!result.ok) {
-              return err(result.error);
-            }
-
+      this._promise
+        .finally(() => Promise.resolve(onFinally()).catch(() => { }))
+        .then(result => {
+          if (result.ok) {
             ok(result.value);
-          })
-          .catch((reason) => err(reason as E));
-      });
+            return;
+          }
+
+          err(result.error);
+        });
     });
   }
 
