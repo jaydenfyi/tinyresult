@@ -94,7 +94,7 @@ function getGithubUserBio(username: string) {
 }
 
 async function run() {
-  const result = await getGithubUserBio("Not-Jayden");
+  const result = await getGithubUserBio("jaydenfyi");
 
   result.match(
     (data) => console.log("User Bio details:", data),
