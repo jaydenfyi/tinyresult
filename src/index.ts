@@ -183,6 +183,7 @@ export class ResultImplementation<T, E = unknown>
       if (!result.ok) {
         return result as Result<never, E>;
       }
+
       values.push(result.value);
     }
     return ResultImplementation.ok(values);
@@ -450,7 +451,6 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
       Promise.all(promises)
         .then((results) => {
           const allResults = ResultImplementation.all(results);
-
           if (!allResults.ok) {
             return err(allResults.error);
           }
