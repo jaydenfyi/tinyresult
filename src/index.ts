@@ -60,12 +60,6 @@ export type Result<T, E = unknown> = (OkResult<T> | ErrorResult<E>) &
   ResultPrototype<T, E>;
 
 export interface ResultConstructor {
-  // new <T, E = unknown>(
-  //   executor: (
-  //     ok: (v: T) => Result<T, never>,
-  //     error: (e: E) => Result<never, E>,
-  //   ) => Result<T, E>,
-  // ): Result<T, E>;
   ok<T>(value: T): Result<T, never>;
   error<E>(error: E): Result<never, E>;
   try<T, E = unknown>(callbackFn: () => T): Result<T, E>;
@@ -73,7 +67,6 @@ export interface ResultConstructor {
   from<T, E = unknown>(result: ResultLike<T, E>): Result<T, E>;
   isResult(result: unknown): result is Result<unknown, unknown>;
 
-  // —— Allow subclassing / species-aware APIs (mirrors Promise.species)
   readonly [Symbol.species]: ResultConstructor;
 
   readonly prototype: Result<unknown, unknown>;
@@ -108,7 +101,6 @@ export interface AsyncResultPrototype<T, E> {
     onError: (error: E) => TError | PromiseLike<TError>,
   ): Promise<TValue | TError>;
 
-  // —— Tag for branding
   readonly [Symbol.toStringTag]: "AsyncResult";
 }
 
@@ -138,7 +130,6 @@ export interface AsyncResultConstructor {
     asyncResult: unknown,
   ): asyncResult is AsyncResult<unknown, unknown>;
 
-  // —— Species for correct subclassing via `then()`
   readonly [Symbol.species]: AsyncResultConstructor;
 
   readonly prototype: AsyncResult<unknown, unknown>;
@@ -170,7 +161,6 @@ export class ResultImplementation<T, E = unknown>
     this.value = rawResult.value;
   }
 
-  // Static methods
   static ok<T>(value: T): Result<T, never> {
     return new ResultImplementation({ ok: true, value }) as Result<T, never>;
   }
@@ -208,12 +198,11 @@ export class ResultImplementation<T, E = unknown>
     return value instanceof ResultImplementation;
   }
 
-  // This is required to make the Newable signature work
+
   static get [Symbol.species]() {
     return ResultImplementation;
   }
 
-  // Instance methods (implementing ResultPrototype)
   map<U>(callbackFn: (value: T) => PromiseLike<U>): AsyncResult<U, E>;
   map<U>(callbackFn: (value: T) => U): Result<U, E>;
   map<U>(
@@ -367,8 +356,8 @@ export class ResultImplementation<T, E = unknown>
     if (isThenable(tapErrorResult)) {
       return new AsyncResultImplementation<T, E>((okCallback, errCallback) => {
         Promise.resolve(tapErrorResult)
-          .then(() => errCallback(this.error!)) // Still propagate original error if tapError succeeds
-          .catch((reason) => okCallback(reason as T)); // If tapError promise rejects, it becomes an Ok value
+          .then(() => errCallback(this.error!))
+          .catch((reason) => okCallback(reason as T));
       });
     }
 
@@ -422,7 +411,6 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
     });
   }
 
-  // Static methods
   static ok<T>(value: T): AsyncResult<T, never> {
     return new AsyncResultImplementation<T, never>((ok) => ok(value));
   }
@@ -505,12 +493,10 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
     return asyncResult instanceof AsyncResultImplementation;
   }
 
-  // This is required to make the Newable signature work
   static get [Symbol.species]() {
     return AsyncResultImplementation;
   }
 
-  // Instance methods
   then<TResult1 = Result<T, E>, TResult2 = never>(
     onfulfilled?:
       | ((value: Result<T, E>) => TResult1 | PromiseLike<TResult1>)
@@ -654,7 +640,6 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
     onOk: (value: T) => TValue | PromiseLike<TValue>,
     onError: (error: E) => TError | PromiseLike<TError>,
   ): Promise<TValue | TError> {
-    // Use a simpler approach that directly returns a Promise
     return this._promise.then(async (result): Promise<TValue | TError> => {
       if (!result.ok) {
         return await Promise.resolve(onError(result.error));
