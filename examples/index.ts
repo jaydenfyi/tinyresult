@@ -1,25 +1,11 @@
-import { Result } from "../src";
+import { AsyncResult, Result } from "../src/index.js";
 
-const userNames = Result.ok([
+const userNames = AsyncResult.ok([
     { id: 1, name: "Alice", age: 30 },
     { id: 2, name: "Bob", age: 25 },
     { id: 3, name: "Charlie", age: 16 },
 ])
-    .flatMap((users) => {
-        if (users.length === 0) {
-            return Result.error("No users found" as const);
-        }
-
-        if (users.some((user) => user.name === "Bob")) {
-            return Result.error("Bob is not allowed" as const);
-        }
-
-        if (users.some((user) => user.age < 18)) {
-            return Result.error("Some users are under 18" as const);
-        }
-
-        return Result.ok(users);
-    })
+    .flatMap(validateUsers)
     .tapError((error) => {
         if (error === "No users found") {
             console.error("Error: No users found");
@@ -42,3 +28,19 @@ const userNames = Result.ok([
         console.error("Error:", error);
         throw new Error(error);
     });
+
+function validateUsers(users: { id: number; name: string; age: number; }[]) {
+    if (users.length === 0) {
+        return Result.error("No users found" as const);
+    }
+
+    if (users.some((user) => user.name === "Bob")) {
+        return Result.error("Bob is not allowed" as const);
+    }
+
+    if (users.some((user) => user.age < 18)) {
+        return Result.error("Some users are under 18" as const);
+    }
+
+    return Result.ok(users);
+}

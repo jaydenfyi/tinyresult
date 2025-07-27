@@ -71,7 +71,7 @@ export interface ResultConstructor {
 export interface AsyncResultPrototype<T, E> {
   map<U>(callbackFn: (value: T) => U | PromiseLike<U>): AsyncResult<U, E>;
   flatMap<U, F = E>(
-    callbackFn: (value: T) => AsyncResult<U, F>,
+    callbackFn: (value: T) => Result<U, F> | AsyncResult<U, F>,
   ): AsyncResult<U, E | F>;
 
   mapError<F>(callbackFn: (error: E) => PromiseLike<F>): AsyncResult<T, F>;
@@ -81,7 +81,7 @@ export interface AsyncResultPrototype<T, E> {
   catch<U>(callbackFn: (error: E) => U): AsyncResult<T | U, never>;
 
   flatMapError<U, F = E>(
-    callbackFn: (error: E) => AsyncResult<U, F>,
+    callbackFn: (error: E) => Result<U, F> | AsyncResult<U, F>,
   ): AsyncResult<T | U, F>;
 
   tap(onOk: (value: T) => void | PromiseLike<void>): AsyncResult<T, E>;
@@ -126,7 +126,7 @@ export interface AsyncResultConstructor {
 function isThenable<T = unknown>(value: unknown): value is PromiseLike<T> {
   return (
     value !== null &&
-    typeof value === "object" || typeof value === "function" &&
+    (typeof value === "object" || typeof value === "function") &&
     typeof (value as any).then === "function"
   );
 }
@@ -509,21 +509,39 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
   }
 
   flatMap<U, F = E>(
-    callbackFn: (value: T) => AsyncResult<U, F>,
-  ): AsyncResult<U, F> {
-    return new AsyncResultImplementation<U, F>((ok, err) => {
+    callbackFn: (value: T) => Result<U, F> | AsyncResult<U, F>,
+  ): AsyncResult<U, E | F> {
+    return new AsyncResultImplementation<U, E | F>((ok, err) => {
       this._promise.then((result) => {
         if (!result.ok) {
-          return err(result.error as unknown as F);
+          err(result.error);
+          return;
         }
 
-        callbackFn(result.value).then((innerResult) => {
-          if (!innerResult.ok) {
-            return err(innerResult.error);
+        const next = callbackFn(result.value);
+
+        if (AsyncResultImplementation.isAsyncResult(next)) {
+          next.then((innerResult) => {
+            if (!innerResult.ok) {
+              err(innerResult.error);
+              return;
+            }
+
+            ok(innerResult.value);
+            return;
+          });
+          return;
+        }
+
+        if (ResultImplementation.isResult(next)) {
+          if (!next.ok) {
+            err(next.error);
+            return;
           }
 
-          ok(innerResult.value);
-        });
+          ok(next.value);
+          return;
+        }
       });
     });
   }
@@ -544,21 +562,36 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
   }
 
   flatMapError<U, F = E>(
-    callbackFn: (error: E) => AsyncResult<U, F>,
-  ): AsyncResult<U, F> {
-    return new AsyncResultImplementation<U, F>((ok, err) => {
+    callbackFn: (error: E) => Result<U, F> | AsyncResult<U, F>,
+  ): AsyncResult<T | U, F> {
+    return new AsyncResultImplementation<T | U, F>((ok, err) => {
       this._promise.then((result) => {
         if (result.ok) {
-          return ok(result.value as unknown as U);
+          ok(result.value);
+          return;
         }
 
-        callbackFn(result.error).then((innerResult) => {
-          if (!innerResult.ok) {
-            return err(innerResult.error);
-          }
+        const next = callbackFn(result.error);
 
-          ok(innerResult.value);
-        });
+        if (AsyncResultImplementation.isAsyncResult(next)) {
+          next.then((innerResult) => {
+            if (!innerResult.ok) {
+              err(innerResult.error);
+              return;
+            }
+            ok(innerResult.value);
+          });
+          return;
+        }
+
+        if (ResultImplementation.isResult(next)) {
+          if (!next.ok) {
+            err(next.error);
+            return;
+          }
+          ok(next.value);
+          return;
+        }
       });
     });
   }
