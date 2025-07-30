@@ -1,0 +1,41 @@
+{
+  "inputs": {
+    "src/core/index.ts": {
+      "bytes": 3060,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/pipe/index.ts": {
+      "bytes": 2235,
+      "imports": [
+        {
+          "path": "src/core/index.ts",
+          "kind": "import-statement",
+          "original": "../core/index.js"
+        },
+        {
+          "path": "src/core/index.ts",
+          "kind": "import-statement",
+          "original": "../core/index.js"
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "outputs": {
+    "dist-test/bundle.js": {
+      "imports": [],
+      "exports": [],
+      "entryPoint": "src/pipe/index.ts",
+      "inputs": {
+        "src/core/index.ts": {
+          "bytesInOutput": 746
+        },
+        "src/pipe/index.ts": {
+          "bytesInOutput": 429
+        }
+      },
+      "bytes": 1200
+    }
+  }
+}

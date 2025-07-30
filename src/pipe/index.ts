@@ -8,15 +8,15 @@ import {
   tapError as tapErrorFn,
   tapBoth as finallyFn,
   match as matchFn,
-  type Result,
-} from '../core/index.js'
+  type Result as CoreResult,
+} from "../core/index.js"
 
-export type { Result }
+export type Result<T, E = unknown> = CoreResult<T, E>
 
-export { ok, error, tryCatch, all } from '../core/index.js'
+export { ok, error, from, isResult, tryCatch, all } from '../core/index.js'
 
 export function map<T, E, U>(fn: (value: T) => U) {
-  return (result: Result<T, E>) => mapFn(result, fn)
+  return (result: CoreResult<T, E>) => mapFn(result, fn)
 }
 
 export function flatMap<T, E, U, F = E>(
@@ -26,7 +26,7 @@ export function flatMap<T, E, U, F = E>(
 }
 
 export function mapError<T, E, F>(fn: (error: E) => F) {
-  return (result: Result<T, E>) => mapErrorFn(result, fn)
+  return (result: CoreResult<T, E>) => mapErrorFn(result, fn)
 }
 
 export function flatMapError<T, E, U, F = E>(
@@ -36,24 +36,24 @@ export function flatMapError<T, E, U, F = E>(
 }
 
 export function catchError<T, E, U>(fn: (error: E) => U) {
-  return (result: Result<T, E>) => catchErrorFn(result, fn)
+  return (result: CoreResult<T, E>) => catchErrorFn(result, fn)
 }
 
 export function tap<T, E>(onOk: (value: T) => void) {
-  return (result: Result<T, E>) => tapFn(result, onOk)
+  return (result: CoreResult<T, E>) => tapFn(result, onOk)
 }
 
 export function tapError<T, E>(onError: (error: E) => void) {
-  return (result: Result<T, E>) => tapErrorFn(result, onError)
+  return (result: CoreResult<T, E>) => tapErrorFn(result, onError)
 }
 
 export function tapBoth<T, E>(callbackFn: () => void) {
-  return (result: Result<T, E>) => finallyFn(result, callbackFn)
+  return (result: CoreResult<T, E>) => finallyFn(result, callbackFn)
 }
 
 export function match<T, E, TValue, TError>(
   onOk: (value: T) => TValue,
   onError: (error: E) => TError,
 ) {
-  return (result: Result<T, E>) => matchFn(result, onOk, onError)
+  return (result: CoreResult<T, E>) => matchFn(result, onOk, onError)
 }

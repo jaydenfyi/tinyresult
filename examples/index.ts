@@ -11,10 +11,11 @@ const userNames = AsyncResult.ok([
             console.error("Error: No users found");
         }
     })
-    .flatMap((users) => {
-        return Result.ok(users.map((user) => user.name));
-    })
-    .flatMap((names) => {
+    .flatMap(
+        function getUserNames(users) {
+            return Result.ok(users.map((user) => user.name));
+        })
+    .flatMap(function validateArrayLength(names) {
         if (names.length === 0) {
             return Result.error("No user names found" as const);
         }

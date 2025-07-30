@@ -109,17 +109,3 @@ export function match<T, E, TValue, TError>(
 ): TValue | TError {
     return result.ok ? onOk(result.value) : onError(result.error);
 }
-
-
-const validatedUsername = flatMap(
-    ok("zuck" as const),
-    (username) => {
-        if (username.length === 0) {
-            return error("EMPTY_USERNAME" as const);
-        }
-        if (username.length < 2) {
-            return error("USERNAME_TOO_SHORT" as const);
-        }
-        return ok(username);
-    }
-)
