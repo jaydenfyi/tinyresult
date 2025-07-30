@@ -16,7 +16,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
   "files": [
@@ -28,5 +29,8 @@
     "prettier": "^3.6.2",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "esbuild": "^0.25.8"
   }
 }
