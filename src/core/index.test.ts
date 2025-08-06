@@ -60,18 +60,19 @@ describe("core", () => {
 
     test("returns error when function throws", () => {
       const err = new Error("boom");
-      const r = tryCatch(() => {
+      const fn = (): void => {
         throw err;
-      });
+      };
+      const r = tryCatch(fn);
       expect(r.ok).toBe(false);
       if (r.ok) throw new Error();
       expect(r.error).toBe(err);
     });
   });
-
+  ``
   describe("all", () => {
     test("collects all ok values", () => {
-      const r = all([ok(1), ok(2)]);
+      const r = all([ok(1), ok(2)] as const);
       expect(r.ok).toBe(true);
       if (!r.ok) throw new Error();
       expect(r.value).toEqual([1, 2]);
@@ -100,7 +101,7 @@ describe("core", () => {
 
   describe("flatMap", () => {
     test("flattens the result if ok", () => {
-      const r = flatMap(ok(2), (v) => ok(v + 1)) as ResultLike<number, never>;
+      const r = flatMap(ok(2), (v) => ok(v + 1));
       expect(r).toEqual({ ok: true, value: 3 });
     });
 

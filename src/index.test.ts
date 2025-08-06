@@ -473,7 +473,7 @@ describe("AsyncResult", () => {
 
   describe("AsyncResult.all", () => {
     test("should return an ok AsyncResult with all values if all results are ok", async () => {
-      const results = [AsyncResult.ok(1), AsyncResult.ok(2), AsyncResult.ok(3)];
+      const results = [AsyncResult.ok(1), AsyncResult.ok(2), AsyncResult.ok(3)] as const;
       const result = await AsyncResult.all(results);
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("Result should be ok");

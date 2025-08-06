@@ -1,6 +1,5 @@
 import type { Result as ResultLike, OkResult, ErrorResult } from "./core/index.js";
 import {
-  all as allFn,
   catchError as catchErrorFn,
   flatMap as flatMapFn,
   flatMapError as flatMapErrorFn,
@@ -11,13 +10,20 @@ import {
   tapBoth as tapBothFn,
   tapError as tapErrorFn,
   tryCatch as tryCatchFn,
-} from "./core/index.js";
+} from "./core/dualResult2.js";
 
 type ResultLikeInternal<T, E = unknown> = {
   ok: boolean;
   value?: T;
   error?: E;
 };
+type ExtractOkResultValues<T> = {
+  -readonly [K in keyof T]: T[K] extends Result<infer U, any> ? U : T[K];
+};
+
+type ExtractErrorResultValue<T> = T extends readonly Result<any, infer E>[]
+  ? E
+  : never;
 
 export interface ResultPrototype<T, E> {
   map<U>(callbackFn: (value: T) => PromiseLike<U>): AsyncResult<U, E>;
@@ -63,7 +69,9 @@ export interface ResultConstructor {
   ok<T>(value: T): Result<T, never>;
   error<E>(error: E): Result<never, E>;
   try<T, E = unknown>(callbackFn: () => T): Result<T, E>;
-  all<T, E = unknown>(iterable: Iterable<Result<T, E>>): Result<T[], E>;
+  all<const T extends readonly Result<any, any>[]>(
+    results: T,
+  ): Result<ExtractOkResultValues<T>, ExtractErrorResultValue<T>>;
   from<T, E = unknown>(result: ResultLike<T, E>): Result<T, E>;
   isResult(result: unknown): result is Result<unknown, unknown>;
 
@@ -109,8 +117,24 @@ export interface AsyncResultConstructor {
   error<E>(error: E): AsyncResult<never, E>;
   try<T, E = unknown>(callbackFn: () => T | Promise<T>): AsyncResult<T, E>;
   all<T, E = unknown>(
-    iterable: Iterable<T | AsyncResult<T, E>>,
+    iterable: readonly (T | PromiseLike<T> | Result<T, E> | AsyncResult<T, E>)[]
   ): AsyncResult<T[], E>;
+  all<const T extends readonly any[]>(
+    results: T
+  ): AsyncResult<
+    { -readonly [K in keyof T]: T[K] extends PromiseLike<infer U>
+      ? U
+      : T[K] extends PromiseLike<Result<infer U, any>>
+      ? U
+      : T[K] extends Result<infer U, any>
+      ? U
+      : T[K] },
+    T[number] extends PromiseLike<Result<any, infer E>>
+    ? E
+    : T[number] extends Result<any, infer E>
+    ? E
+    : never
+  >;
   from<T, E = unknown>(
     result: ResultLike<T, E> | PromiseLike<ResultLike<T, E>>,
   ): AsyncResult<T, E>;
@@ -161,11 +185,26 @@ export class ResultImplementation<T, E = unknown>
   }
 
   static try<T, E = unknown>(callbackFn: () => T): Result<T, E> {
-    return ResultImplementation.from(tryCatchFn(callbackFn));
+    return ResultImplementation.from(tryCatchFn(callbackFn) as ResultLike<T, E>);
   }
 
-  static all<T, E>(iterable: Iterable<Result<T, E>>): Result<T[], E> {
-    return ResultImplementation.from(allFn(iterable));
+  static all<const T extends readonly Result<any, any>[]>(
+    results: T,
+  ): Result<ExtractOkResultValues<T>, ExtractErrorResultValue<T>> {
+    const values = [] as unknown as ExtractOkResultValues<T>;
+
+    for (const result of results) {
+      if (!result.ok) {
+        return ResultImplementation.error(result.error) as Result<
+          never,
+          ExtractErrorResultValue<T>
+        >;
+      }
+
+      values.push(result.value);
+    }
+
+    return ResultImplementation.ok(values);
   }
 
   static from<T, E>(result: ResultLike<T, E>): Result<T, E> {
@@ -210,7 +249,7 @@ export class ResultImplementation<T, E = unknown>
     if (isThenable(result)) {
       return new AsyncResultImplementation<U, F>((okCallback, errCallback) => {
         Promise.resolve(result).then((r) => {
-          matchFn(r, okCallback, errCallback as (err: F) => void);
+          matchFn(r, okCallback, (err) => errCallback(err as F));
         });
       });
     }
@@ -376,20 +415,49 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
   }
 
   static all<T, E = unknown>(
-    iterable: Iterable<T | AsyncResult<T, E>>,
-  ): AsyncResult<T[], E> {
+    iterable: readonly (T | PromiseLike<T> | Result<T, E> | AsyncResult<T, E>)[]
+  ): AsyncResult<T[], E>;
+  static all<const T extends readonly any[]>(
+    results: T
+  ): AsyncResult<
+    { -readonly [K in keyof T]: T[K] extends PromiseLike<infer U>
+      ? U
+      : T[K] extends PromiseLike<Result<infer U, any>>
+      ? U
+      : T[K] extends Result<infer U, any>
+      ? U
+      : T[K] },
+    T[number] extends PromiseLike<Result<any, infer E>>
+    ? E
+    : T[number] extends Result<any, infer E>
+    ? E
+    : never
+  >;
+  static all(
+    iterable: readonly any[]
+  ): AsyncResult<any, any> {
     const promises = Array.from(iterable).map((item) => {
-      if (AsyncResultImplementation.isAsyncResult(item)) {
-        return item.then((result) => result);
+      if (isThenable(item)) {
+        return item.then((result: any) => {
+          if (ResultImplementation.isResult(result)) {
+            return result
+          }
+
+          return ResultImplementation.ok(result)
+        })
       }
 
-      return Promise.resolve(ResultImplementation.ok(item as T));
+      if (ResultImplementation.isResult(item)) {
+        return Promise.resolve(item)
+      }
+
+      return Promise.resolve(ResultImplementation.ok(item as any));
     });
 
-    return new AsyncResultImplementation<T[], E>((ok, err) => {
+    return new AsyncResultImplementation<any, any>((ok, err) => {
       Promise.all(promises)
         .then((results) => {
-          const allResults = ResultImplementation.all(results);
+          const allResults = ResultImplementation.all(results as any);
           matchFn(allResults, ok, err);
         })
         .catch(() => { });

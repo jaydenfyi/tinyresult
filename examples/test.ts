@@ -8,9 +8,9 @@ const asyncValidatedUsername = await AsyncResult.match(
         AsyncResult.ok("Alice" as const),
         (username) => {
             if (username.toString() === "Bob") {
-                return Promise.resolve(AsyncResult.error("Bob is not allowed"));
+                return Result.error("USERNAME_BOB_NOT_ALLOWED" as const);
             }
-            return Promise.resolve(AsyncResult.ok(username));
+            return Result.error("USERNAME_NOT_ALPHANUMERIC" as const);
         }
     ),
     (username) => `Username is valid: ${username}` as const,

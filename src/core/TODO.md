@@ -1,0 +1,3 @@
+- [ ] Complete the generic unions stuff like flatMap to preserve original error/value
+- [ ] Dual API's - implement core logic in one place with pipeable https://github.com/Effect-TS/effect/blob/e2cb1113/packages/effect/src/Function.ts#L95
+    - unclear if this is feasible when the api's have overloads
