@@ -1,6 +1,8 @@
 import { dual } from "effect/Function";
 import { pipe } from "effect";
 
+export { pipe } from "effect";
+
 export interface OkResult<T> {
     readonly ok: true;
     readonly value: T;
@@ -101,6 +103,8 @@ export function tryCatch<T>(fn: () => T | PromiseLike<T>): Result<T, unknown> | 
         return error<unknown>(e);
     }
 }
+
+export { tryCatch as try }
 
 /** ── all ───────────────────────────────────────────────────────────────────
  * If every input is sync, returns Result<…>; if *any* is async, returns AsyncResult<…>.
