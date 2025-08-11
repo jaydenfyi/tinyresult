@@ -4,7 +4,7 @@ const userNames = AsyncResult.ok([
     { id: 1, name: "Alice", age: 30 },
     { id: 2, name: "Bob", age: 25 },
     { id: 3, name: "Charlie", age: 16 },
-])
+] as const)
     .flatMap(validateUsers)
     .tapError((error) => {
         if (error === "No users found") {
@@ -30,7 +30,7 @@ const userNames = AsyncResult.ok([
         throw new Error(error);
     });
 
-function validateUsers(users: { id: number; name: string; age: number; }[]) {
+function validateUsers<T extends readonly { id: number; name: string; age: number; }[]>(users: T) {
     if (users.length === 0) {
         return Result.error("No users found" as const);
     }

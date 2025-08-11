@@ -1,7 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { all, error, flatMap, map, mapError, ok, tap, tapBoth, tryCatch } from "./dualResult2";
-import * as Result from "./dualResult2";
-import { pipe } from "effect";
+import * as Result from ".";
 
 describe("coretests", async () => {
     const validatedUsername = Result.tap(
@@ -120,7 +118,4 @@ describe("coretests", async () => {
         expect(res.ok).toBe(true);
         expect((res as any)?.value).toMatch(/Fetched Pokémon: \w+ \(ID: \d+, Weight: \d+\)/);
     })
-    // validatedUsername.then((x) => {
-    //     console.log("Final result:", x);
-    // })
 });

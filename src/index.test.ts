@@ -55,7 +55,7 @@ describe("Result", () => {
 
     test("should return an error result when the callback throws", () => {
       const error = new Error("test error");
-      const result = Result.try(() => {
+      const result = Result.try((): void => {
         throw error;
       });
       expect(result.ok).toBe(false);

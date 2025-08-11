@@ -1,7 +1,6 @@
-import { pipe } from "effect";
-import * as Result from "../src/pipe/resultAsync.js";
+import * as Result from "../src/core/index.js";
 
-const validatedUsername = pipe(
+const validatedUsername = Result.pipe(
     Result.ok("zuck" as const),
     Result.flatMap((username) => {
         if (username.length === 0) {

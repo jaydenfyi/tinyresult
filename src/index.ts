@@ -1,4 +1,4 @@
-import type { Result as ResultLike, OkResult, ErrorResult } from "./core/index.js";
+// import type { OkResult, ErrorResult } from "./core/index.js";
 import {
   catchError as catchErrorFn,
   flatMap as flatMapFn,
@@ -10,7 +10,9 @@ import {
   tapBoth as tapBothFn,
   tapError as tapErrorFn,
   tryCatch as tryCatchFn,
-} from "./core/dualResult2.js";
+  type Result as ResultLike,
+  type MaybeAsyncResult as MaybeAsyncResultLike,
+} from "./core/index.js";
 
 type ResultLikeInternal<T, E = unknown> = {
   ok: boolean;
@@ -62,13 +64,16 @@ export interface ResultPrototype<T, E> {
   readonly [Symbol.toStringTag]: "Result";
 }
 
-export type Result<T, E = unknown> = (OkResult<T> | ErrorResult<E>) &
+export type Result<T, E = unknown> = (ResultLike<T, E>) &
   ResultPrototype<T, E>;
 
 export interface ResultConstructor {
   ok<T>(value: T): Result<T, never>;
   error<E>(error: E): Result<never, E>;
-  try<T, E = unknown>(callbackFn: () => T): Result<T, E>;
+  try<T>(callbackFn: () => PromiseLike<T>): AsyncResult<T, unknown>;
+  try<T>(callbackFn: () => T): Result<T, unknown>;
+  try<T, F>(callbackFn: () => PromiseLike<T>, onError: (e: unknown) => F): AsyncResult<T, F>;
+  try<T, F>(callbackFn: () => T, onError: (e: unknown) => F): Result<T, F>;
   all<const T extends readonly Result<any, any>[]>(
     results: T,
   ): Result<ExtractOkResultValues<T>, ExtractErrorResultValue<T>>;
@@ -112,10 +117,17 @@ export interface AsyncResult<T, E = unknown>
   extends PromiseLike<Result<T, E>>,
   AsyncResultPrototype<T, E> { }
 
+type MaybeAsyncResult<T, E = unknown> =
+  | Result<T, E>
+  | AsyncResult<T, E>;
+
 export interface AsyncResultConstructor {
   ok<T>(value: T): AsyncResult<T, never>;
   error<E>(error: E): AsyncResult<never, E>;
-  try<T, E = unknown>(callbackFn: () => T | Promise<T>): AsyncResult<T, E>;
+  try<T>(callbackFn: () => PromiseLike<T>): AsyncResult<T, unknown>;
+  try<T>(callbackFn: () => T): AsyncResult<T, unknown>;
+  try<T, F>(callbackFn: () => PromiseLike<T>, onError: (e: unknown) => F): AsyncResult<T, F>;
+  try<T, F>(callbackFn: () => T, onError: (e: unknown) => F): AsyncResult<T, F>;
   all<T, E = unknown>(
     iterable: readonly (T | PromiseLike<T> | Result<T, E> | AsyncResult<T, E>)[]
   ): AsyncResult<T[], E>;
@@ -136,7 +148,7 @@ export interface AsyncResultConstructor {
     : never
   >;
   from<T, E = unknown>(
-    result: ResultLike<T, E> | PromiseLike<ResultLike<T, E>>,
+    result: MaybeAsyncResultLike<T, E>,
   ): AsyncResult<T, E>;
   fromPromise<T, E = unknown>(
     promise: Promise<T>,
@@ -169,11 +181,21 @@ export class ResultImplementation<T, E = unknown>
     this.ok = rawResult.ok;
 
     if (!rawResult.ok) {
-      this.error = rawResult.error;
+      Object.defineProperty(this, "error", {
+        value: rawResult.error,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
       return;
     }
 
-    this.value = rawResult.value;
+    Object.defineProperty(this, "value", {
+      value: rawResult.value,
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    });
   }
 
   static ok<T>(value: T): Result<T, never> {
@@ -238,13 +260,13 @@ export class ResultImplementation<T, E = unknown>
   }
 
   flatMap<U, F = E>(
-    callbackFn: (value: T) => PromiseLike<Result<U, F>>,
+    callbackFn: (value: T) => AsyncResult<U, F>,
   ): AsyncResult<U, F>;
   flatMap<U, F = E>(callbackFn: (value: T) => Result<U, F>): Result<U, F>;
   flatMap<U, F = E>(
-    callbackFn: (value: T) => Result<U, F> | PromiseLike<Result<U, F>>,
-  ): Result<U, F> | AsyncResult<U, F> {
-    const result = flatMapFn(this as Result<T, E>, callbackFn);
+    callbackFn: (value: T) => MaybeAsyncResult<U, F>,
+  ): MaybeAsyncResult<U, F> {
+    const result = flatMapFn(this as Result<T, E>, callbackFn as unknown as (value: T) => MaybeAsyncResultLike<U, F>);
 
     if (isThenable(result)) {
       return new AsyncResultImplementation<U, F>((okCallback, errCallback) => {
@@ -281,7 +303,7 @@ export class ResultImplementation<T, E = unknown>
   flatMapError<U, F = E>(
     callbackFn: (error: E) => Result<U, F> | PromiseLike<Result<U, F>>,
   ): Result<T | U, F> | AsyncResult<T | U, F> {
-    const result = flatMapErrorFn(this as Result<T, E>, callbackFn);
+    const result = flatMapErrorFn(this as Result<T, E>, callbackFn as unknown as (error: E) => MaybeAsyncResultLike<U, F>);
 
     if (isThenable(result)) {
       return new AsyncResultImplementation<T | U, F>((okCallback, errCallback) => {
@@ -402,17 +424,14 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
     return new AsyncResultImplementation<never, E>((_, err) => err(error));
   }
 
-  static try<T, E = unknown>(
+  static try<T, F = unknown>(
     callbackFn: () => T | PromiseLike<T>,
-  ): AsyncResult<T, E> {
-    return new AsyncResultImplementation<T, E>((ok, err) => {
-      try {
-        Promise.resolve(callbackFn()).then(ok, (reason) => err(reason as E));
-      } catch (e) {
-        err(e as E);
-      }
-    });
+    onError?: (e: unknown) => F
+  ): AsyncResult<T, F> {
+    const out = tryCatchFn(callbackFn, onError as ((e: unknown) => F)) as MaybeAsyncResultLike<T, F>;
+    return AsyncResultImplementation.from(out);
   }
+
 
   static all<T, E = unknown>(
     iterable: readonly (T | PromiseLike<T> | Result<T, E> | AsyncResult<T, E>)[]
@@ -465,7 +484,7 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
   }
 
   static from<T, E = unknown>(
-    result: ResultLike<T, E> | Promise<ResultLike<T, E>>,
+    result: MaybeAsyncResultLike<T, E>,
   ): AsyncResult<T, E> {
     return new AsyncResultImplementation<T, E>((ok, err) => {
       Promise.resolve(result).then(
