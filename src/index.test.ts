@@ -433,19 +433,11 @@ describe('AsyncResult', () => {
 				AsyncResult.ok(1),
 				AsyncResult.error(error),
 				AsyncResult.ok(3),
-			];
+			] as const;
 			const result = await AsyncResult.all(results);
 			expect(result.ok).toBe(false);
 			if (result.ok) throw new Error('Result should be an error');
 			expect(result.error).toBe(error);
-		});
-
-		test('should handle a mix of AsyncResult and non-AsyncResult values', async () => {
-			const results = [1, AsyncResult.ok(2), 3];
-			const result = await AsyncResult.all(results);
-			expect(result.ok).toBe(true);
-			if (!result.ok) throw new Error('Result should be ok');
-			expect(result.value).toEqual([1, 2, 3]);
 		});
 	});
 
@@ -679,7 +671,12 @@ describe('AsyncResult', () => {
 
 	describe('AsyncResult.prototype.match', () => {
 		test('should return the value from onOk if ok', async () => {
-			const result = AsyncResult.ok('value');
+			const result = AsyncResult.ok('value').tap(async (value) => {
+				console.log('Time now: ', new Date().toISOString());
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+				console.log('Time after 1 second: ', new Date().toISOString());
+				console.log(`Tapped value: ${value}`);
+			});
 			const matched = await result.match(
 				(value) => `Ok: ${value}`,
 				(error) => `Error: ${error}`,
