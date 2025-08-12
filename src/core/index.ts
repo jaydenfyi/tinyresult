@@ -1,5 +1,4 @@
-import { dual } from "./dual.js";
-import { pipe } from "./pipe.js";
+import { dual, isPromiseLike } from "./internal.js";
 
 export { pipe } from "./pipe.js";
 
@@ -17,9 +16,6 @@ export type Result<T, E = unknown> = OkResult<T> | ErrorResult<E>;
 export type AsyncResult<T, E = unknown> = Promise<Result<T, E>>;
 export type MaybeAsyncResult<T, E = unknown> = Result<T, E> | AsyncResult<T, E>;
 
-const isPromiseLike = (v: unknown): v is PromiseLike<unknown> =>
-    !!v && typeof (v as any).then === "function";
-
 type ResolveResult<R> =
     R extends PromiseLike<infer P> ? (P extends Result<any, any> ? P : never)
     : R extends Result<any, any> ? R
@@ -28,22 +24,11 @@ type ResolveResult<R> =
 export type ResolveOkValue<R> = ResolveResult<R> extends Result<infer T, any> ? T : never;
 export type ResolveErrorValue<R> = ResolveResult<R> extends Result<any, infer E> ? E : never;
 
-/**
- * Keeps your original helper: wraps based on the *input* R only.
- * Used by map/mapError/catchError where the mapper returns a plain value.
- * (Expressed via ResultFor<[R], …>.)
- */
 type AnyAsync<Args extends readonly unknown[]> =
     Extract<Args[number], PromiseLike<any>> extends never ? false : true;
 
 type ResultFor<Args extends readonly unknown[], T, E> =
     AnyAsync<Args> extends true ? AsyncResult<T, E> : Result<T, E>;
-
-/**
- * New helper: wraps based on *either* the input (R) or the mapper result (RF).
- * If either is async, the overall is async. Used by flatMap/flatMapError.
- * (Expressed via ResultFor<[R, RF], …>.)
- */
 
 export type ExtractOkResultValues<R extends readonly MaybeAsyncResult<any, any>[]> = {
     -readonly [K in keyof R]: ResolveOkValue<R[K]>;
@@ -102,7 +87,7 @@ export function tryCatch<T, F = unknown>(
     }
 }
 
-export { tryCatch as try }
+export { tryCatch as try, isPromiseLike };
 
 /** ── all ───────────────────────────────────────────────────────────────────
  * If every input is sync, returns Result<…>; if *any* is async, returns AsyncResult<…>.
@@ -127,7 +112,7 @@ export function all<R extends readonly MaybeAsyncResult<any, any>[]>(
     }
 
     return Promise
-        .all(results.map(r => isPromiseLike(r) ? r : Promise.resolve(r)))
+        .all(results)
         .then((resolved) => {
             const values: any[] = [];
             for (const r of resolved) {
@@ -289,6 +274,8 @@ export const catchError: {
     return result.ok ? ok(result.value) : ok(fn(result.error));
 });
 
+export { catchError as catch };
+
 /**
  * Performs a side-effect with the `Ok` value, returning the original `Result` unchanged.
  * Works for both sync and async transparently.
@@ -361,172 +348,6 @@ export const match: {
     if (isPromiseLike(result)) {
         return result.then((r) => match(r, onOk, onError));
     }
+
     return result.ok ? onOk(result.value) : onError(result.error);
 });
-
-/** ── example ─────────────────────────────────────────────────────────────── */
-
-const validatedUsernameAsync = await all([tapBoth(mapError(
-    map(
-        flatMap(
-            flatMap(ok("zuck" as const), async (username) => {
-                if (username.length === 0) return error("EMPTY_USERNAME" as const);
-                if (username.length < 2) return error("USERNAME_TOO_SHORT" as const);
-
-                return ok(username);
-            }),
-            async (x) => {
-                return ok(x.toUpperCase() as Uppercase<typeof x>);
-            },
-        ),
-        (x) => `user is ${x.toLowerCase() as Lowercase<typeof x>}` as const,
-    ),
-    (error) => `Error is: ${error}` as const,
-), (v) => {
-    console.log(v);
-})] as const);
-
-const validatedUsernameSync = all([tapBoth(mapError(
-    map(
-        flatMap(
-            flatMap(ok("zuck" as const), (username) => {
-                if (username.length === 0) return error("EMPTY_USERNAME" as const);
-                if (username.length < 2) return error("USERNAME_TOO_SHORT" as const);
-
-                return ok(username);
-            }),
-            (x) => {
-                return ok(x.toUpperCase() as Uppercase<typeof x>);
-            },
-        ),
-        (x) => `user is ${x.toLowerCase() as Lowercase<typeof x>}` as const,
-    ),
-    (error) => `Error is: ${error}` as const,
-), (v) => {
-    console.log(v);
-})] as const);
-
-
-
-const validatedUsername2 = pipe(
-    ok("zuck" as const),
-    flatMap(async (username) => {
-        if (username.length === 0) return error("EMPTY_USERNAME" as const);
-        if (username.length < 2) return error("USERNAME_TOO_SHORT" as const);
-
-        return ok(username);
-    }),
-    flatMap((x) => ok(x.toUpperCase() as Uppercase<typeof x>)),
-    map((x) => `user is ${x.toLowerCase() as Lowercase<typeof x>}` as const),
-    mapError((error) => `Error is: ${error}` as const),
-    tapBoth((v) => {
-        console.log(v);
-    }),
-);
-
-const validatedUsername3 = pipe(
-    ok("z" as const),
-    flatMap((username) => {
-        if (username.length === 0) return error("EMPTY_USERNAME" as const);
-        if (username.length < 2) return error("USERNAME_TOO_SHORT" as const);
-
-        return ok(username);
-    }),
-    flatMap((x) => ok(x.toUpperCase() as Uppercase<typeof x>)),
-    map((x) => `user is ${x.toLowerCase() as Lowercase<typeof x>}` as const),
-    mapError((error) => `Error is: ${error}` as const),
-    tap((v) => {
-        console.log(v);
-    }),
-    tapBoth((v) => {
-        console.log(v);
-    }),
-);
-
-function validateUsername(username: string) {
-    return pipe(
-        ok(username),
-        flatMap((username) => {
-            if (username.length === 0) return error("EMPTY_USERNAME" as const);
-            if (username.length < 2) return error("USERNAME_TOO_SHORT" as const);
-
-            return ok(username);
-        }),
-        flatMap((x) => ok(x.toUpperCase() as Uppercase<typeof x>)),
-        map((x) => `user is ${x.toLowerCase() as Lowercase<typeof x>}` as const),
-        flatMapError(async (err) => error(`Error is: ${err}` as const)),
-        tapBoth((v) => {
-            console.log(v);
-        }),
-    );
-}
-
-function validateUsernameDataFirst(username: string) {
-    return tapBoth(
-        mapError(
-            map(
-                flatMap(
-                    flatMap(ok(username), (username) => {
-                        if (username.length === 0) return error("EMPTY_USERNAME" as const);
-                        if (username.length < 2) return error("USERNAME_TOO_SHORT" as const);
-
-                        return ok(username);
-                    }),
-                    (x) => ok(x.toUpperCase() as Uppercase<typeof x>),
-                ),
-                (x) => `user is ${x.toLowerCase() as Lowercase<typeof x>}` as const,
-            ),
-            (error) => `Error is: ${error}` as const,
-        ),
-        (v) => {
-            console.log(v);
-        },
-    );
-}
-
-function validateUsernameImperative(username: string) {
-    const result = ok(username);
-
-    const flatMapped = flatMap(result, (username) => {
-        if (username.length === 0) return error("EMPTY_USERNAME" as const);
-        if (username.length < 2) return error("USERNAME_TOO_SHORT" as const);
-
-        return ok(username);
-    });
-
-    if (!flatMapped.ok) {
-        return flatMapped;
-    }
-
-    const uppercased = flatMap(flatMapped, (x) => ok(x.toUpperCase() as Uppercase<typeof x>));
-    if (!uppercased.ok) {
-        return uppercased;
-    }
-
-    const mapped = map(uppercased, (x) => `user is ${x.toLowerCase() as Lowercase<typeof x>}` as const);
-    if (!mapped.ok) {
-        return mapped;
-    }
-
-    return tapBoth(mapped, (v) => {
-        console.log(v);
-    });
-}
-
-function checkSomething() {
-    if (validatedUsername3.ok) {
-        console.log("Username is valid:", validatedUsername3.value);
-        return;
-    }
-
-    console.log("Error:", validatedUsername3.error);
-}
-
-checkSomething();
-
-pipe(validateUsername("batman"), map(x => x.toUpperCase()), tap(console.log));
-pipe(validateUsername("b"), map(x => x.toUpperCase()), tap(console.log));
-
-validateUsername("b").then((result) => {
-    console.log("Async result:", result);
-})

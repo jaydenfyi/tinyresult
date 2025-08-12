@@ -26,19 +26,8 @@ export const dual: {
                     return body(self, a, b)
                 }
             } as any
-
-        default:
-            // Generic fallback (kept for flexibility)
-            return function () {
-                const expected = (body as Function).length
-                if (arguments.length >= expected) {
-                    // @ts-expect-error
-                    return body.apply(this, arguments)
-                }
-                const args = arguments
-                return function (self: any) {
-                    return (body as any)(self, ...args)
-                }
-            } as any
     }
 }
+
+export const isPromiseLike = (v: unknown): v is PromiseLike<unknown> =>
+    !!v && typeof (v as any).then === "function";

@@ -1,6 +1,6 @@
 import { AsyncResult, Result } from "../src/index.js";
 
-const userNames = AsyncResult.ok([
+const userNames: AsyncResult<string, unknown> = await AsyncResult.ok([
     { id: 1, name: "Alice", age: 30 },
     { id: 2, name: "Bob", age: 25 },
     { id: 3, name: "Charlie", age: 16 },
