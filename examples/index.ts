@@ -1,6 +1,6 @@
-import { AsyncResult, Result } from "../src/index.js";
+import { AsyncResult, Result } from "@jaydenfyi/tinyresult";
 
-const userNames: AsyncResult<string, unknown> = await AsyncResult.ok([
+const userNames = AsyncResult.ok([
     { id: 1, name: "Alice", age: 30 },
     { id: 2, name: "Bob", age: 25 },
     { id: 3, name: "Charlie", age: 16 },
@@ -21,16 +21,16 @@ const userNames: AsyncResult<string, unknown> = await AsyncResult.ok([
         }
 
         return Result.ok(names);
-    })
-    .match((names) => {
-        console.log("User names:", names);
-        return names;
-    }, (error) => {
-        console.error("Error:", error);
-        throw new Error(error);
-    });
+    }) satisfies AsyncResult<string[], unknown>;
+    // .match((names) => {
+    //     console.log("User names:", names);
+    //     return names;
+    // }, (error) => {
+    //     console.error("Error:", error);
+    //     throw new Error(error);
+    // });
 
-function validateUsers<T extends readonly { id: number; name: string; age: number; }[]>(users: T) {
+function validateUsers<T extends { id: number; name: string; age: number; }>(users: readonly T[]) {
     if (users.length === 0) {
         return Result.error("No users found" as const);
     }
@@ -45,3 +45,18 @@ function validateUsers<T extends readonly { id: number; name: string; age: numbe
 
     return Result.ok(users);
 }
+
+type ValueOf<R> = R extends { ok: true; value: infer T } ? T : never;
+type ErrorOf<R> = R extends { ok: false; error: infer E } ? E : never;
+type Collapse<R> = ValueOf<R> extends infer TResultValue
+    ? ErrorOf<R> extends infer TResultError
+    ? Result<TResultValue, TResultError>
+    : never
+    : never;
+
+const validatedUsers = validateUsers([
+    { id: 1, name: "Alice", age: 30 },
+    { id: 2, name: "Charlie", age: 20 },
+]) satisfies Collapse<any>;
+
+type ValidatedUsers = Collapse<ReturnType<typeof validateUsers>>;

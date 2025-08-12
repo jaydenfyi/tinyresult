@@ -31,87 +31,102 @@ npm install @jaydenfyi/tinyresult
 `tinyresult` provides a straightforward way to manage operations that can either succeed or fail. Here's a more comprehensive example that showcases chaining and asynchronous operations.
 
 ```typescript
-import { Result, AsyncResult } from "@jaydenfyi/tinyresult";
-import { Octokit } from "@octokit/rest";
+import { Result, AsyncResult } from '@jaydenfyi/tinyresult';
+import { Octokit } from '@octokit/rest';
 
 class ValidationError {
-  readonly _tag = "ValidationError";
-  constructor(readonly message: string) {}
+	readonly _tag = 'ValidationError';
+	constructor(readonly message: string) {}
 }
 
 class NetworkError {
-  readonly _tag = "NetworkError";
-  constructor(readonly status: number, readonly message: string) {}
+	readonly _tag = 'NetworkError';
+	constructor(
+		readonly status: number,
+		readonly message: string,
+	) {}
 }
 
 class UserNotFoundError {
-  readonly _tag = "UserNotFoundError";
-  constructor(readonly username: string) {}
+	readonly _tag = 'UserNotFoundError';
+	constructor(readonly username: string) {}
 }
 
 const octokit = new Octokit();
 
 function getGithubUserBio(username: string) {
-  return (
-    // Step 1: Start with a synchronous value
-    Result.ok(username)
-      // Step 2: Validate the input
-      .flatMap((u) =>
-        !u || u.trim().length === 0
-          ? Result.error(new ValidationError("Username cannot be empty"))
-          : Result.ok(u),
-      )
-      // Step 3: Log the valid input (side-effect)
-      .tap((u) => console.log(`Fetching bio for ${u}...`))
-      // Step 4: Switch to an async context to fetch data
-      .flatMap((u) =>
-        AsyncResult.fromPromise(
-          octokit.users.getByUsername({ username: u }),
-          (err) => new NetworkError(500, err.message),
-        ),
-      )
-      // Step 5: Check the response and extract the data
-      .flatMap((response) =>
-        response.status !== 200
-          ? Result.error(new NetworkError(response.status, "Failed to fetch user"))
-          : Result.ok(response.data),
-      )
-      // Step 6: Process the data
-      .flatMap((user) =>
-        !user.bio
-          ? Result.error(new UserNotFoundError(user.login))
-          : Result.ok({ bio: user.bio, login: user.login }),
-      )
-      // Step 7: Transform the success value
-      .map(({ bio, login }) => ({
-        bio,
-        bioLength: bio.length,
-        user: login,
-      }))
-      // Step 8: Log any errors that occurred in the chain
-      .tapError((err) => console.error(`[Error Log]: ${err._tag}`))
-  );
+	return (
+		// Step 1: Start with a synchronous value
+		Result.ok(username)
+			// Step 2: Validate the input
+			.flatMap((u) =>
+				!u || u.trim().length === 0
+					? Result.error(
+							new ValidationError('Username cannot be empty'),
+						)
+					: Result.ok(u),
+			)
+			// Step 3: Log the valid input (side-effect)
+			.tap((u) => console.log(`Fetching bio for ${u}...`))
+			// Step 4: Switch to an async context to fetch data
+			.flatMap((u) =>
+				AsyncResult.fromPromise(
+					octokit.users.getByUsername({ username: u }),
+					(err) => new NetworkError(500, err.message),
+				),
+			)
+			// Step 5: Check the response and extract the data
+			.flatMap((response) =>
+				response.status !== 200
+					? Result.error(
+							new NetworkError(
+								response.status,
+								'Failed to fetch user',
+							),
+						)
+					: Result.ok(response.data),
+			)
+			// Step 6: Process the data
+			.flatMap((user) =>
+				!user.bio
+					? Result.error(new UserNotFoundError(user.login))
+					: Result.ok({ bio: user.bio, login: user.login }),
+			)
+			// Step 7: Transform the success value
+			.map(({ bio, login }) => ({
+				bio,
+				bioLength: bio.length,
+				user: login,
+			}))
+			// Step 8: Log any errors that occurred in the chain
+			.tapError((err) => console.error(`[Error Log]: ${err._tag}`))
+	);
 }
 
 async function run() {
-  const result = await getGithubUserBio("jaydenfyi");
+	const result = await getGithubUserBio('jaydenfyi');
 
-  result.match(
-    (data) => console.log("User Bio details:", data),
-    (error) => {
-      switch (error._tag) {
-        case "ValidationError":
-          console.error("Validation failed:", error.message);
-          break;
-        case "NetworkError":
-          console.error(`Network error (${error.status}):`, error.message);
-          break;
-        case "UserNotFoundError":
-          console.error(`Could not find a bio for user: ${error.username}`);
-          break;
-      }
-    },
-  );
+	result.match(
+		(data) => console.log('User Bio details:', data),
+		(error) => {
+			switch (error._tag) {
+				case 'ValidationError':
+					console.error('Validation failed:', error.message);
+					break;
+				case 'NetworkError':
+					console.error(
+						`Network error (${error.status}):`,
+						error.message,
+					);
+					break;
+				case 'UserNotFoundError':
+					console.error(
+						`Could not find a bio for user: ${error.username}`,
+					);
+					break;
+			}
+		},
+	);
 }
 
 run();
