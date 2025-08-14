@@ -271,14 +271,9 @@ export class ResultImplementation<T, E = unknown>
 		) as MaybeAsyncResultLike<U, F>;
 
 		if (isPromiseLike(result)) {
-			return new AsyncResultImplementation<U, F>(
-				(okCallback, errCallback) => {
-					result.then((r) => {
-						matchFn(r, okCallback, (err) => errCallback(err as F));
-					});
-				},
-			);
+			return AsyncResultImplementation.from(result);
 		}
+
 		return ResultImplementation.from(result);
 	}
 
@@ -306,11 +301,7 @@ export class ResultImplementation<T, E = unknown>
 		) as MaybeAsyncResultLike<T | U, F>;
 
 		if (isPromiseLike(result)) {
-			return new AsyncResultImplementation<T | U, F>(
-				(okCallback, errCallback) => {
-					result.then(matchFn(okCallback, errCallback));
-				},
-			);
+			return AsyncResultImplementation.from(result);
 		}
 
 		return ResultImplementation.from(result);
@@ -413,9 +404,8 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 		result: MaybeAsyncResultLike<T, E>,
 	): AsyncResult<T, E> {
 		return new AsyncResultImplementation<T, E>((ok, err) => {
-			Promise.resolve(result).then(
-				(r) => (r.ok ? ok(r.value) : err(r.error)),
-				() => {},
+			Promise.resolve(result).then((r) =>
+				r.ok ? ok(r.value) : err(r.error),
 			);
 		});
 	}
@@ -454,15 +444,9 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 	}
 
 	map<U>(callbackFn: (value: T) => U | PromiseLike<U>): AsyncResult<U, E> {
-		return new AsyncResultImplementation<U, E>((ok, err) => {
-			this._promise.then((result) => {
-				if (!result.ok) {
-					return err(result.error);
-				}
-
-				Promise.resolve(callbackFn(result.value)).then(ok);
-			});
-		});
+		return AsyncResultImplementation.from(
+			mapFn(this._promise, callbackFn) as ResultLike<U, E>,
+		);
 	}
 
 	flatMap<U, F = E>(
@@ -471,163 +455,55 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 		return AsyncResultImplementation.from(
 			flatMapFn(this._promise, callbackFn as any),
 		);
-		// return new AsyncResultImplementation<U, E | F>((ok, err) => {
-		// 	this._promise.then((result) => {
-		// 		if (!result.ok) {
-		// 			err(result.error);
-		// 			return;
-		// 		}
-
-		// 		const next = callbackFn(result.value);
-
-		// 		if (AsyncResultImplementation.isAsyncResult(next)) {
-		// 			next.then((innerResult) => {
-		// 				if (!innerResult.ok) {
-		// 					err(innerResult.error);
-		// 					return;
-		// 				}
-
-		// 				ok(innerResult.value);
-		// 				return;
-		// 			});
-		// 			return;
-		// 		}
-
-		// 		if (ResultImplementation.isResult(next)) {
-		// 			if (!next.ok) {
-		// 				err(next.error);
-		// 				return;
-		// 			}
-
-		// 			ok(next.value);
-		// 			return;
-		// 		}
-		// 	});
-		// });
 	}
 
 	mapError<F>(
 		callbackFn: (error: E) => F | PromiseLike<F>,
 	): AsyncResult<T, F> {
-		return new AsyncResultImplementation<T, F>((ok, err) => {
-			this._promise.then((result) => {
-				if (!result.ok) {
-					Promise.resolve(callbackFn(result.error)).then(err);
-					return;
-				}
-
-				ok(result.value);
-			});
-		});
+		return AsyncResultImplementation.from(
+			mapErrorFn(this._promise, callbackFn),
+		);
 	}
 
 	flatMapError<U, F = E>(
 		callbackFn: (error: E) => Result<U, F> | AsyncResult<U, F>,
 	): AsyncResult<T | U, F> {
-		return new AsyncResultImplementation<T | U, F>((ok, err) => {
-			this._promise.then((result) => {
-				if (result.ok) {
-					ok(result.value);
-					return;
-				}
-
-				const next = callbackFn(result.error);
-
-				if (AsyncResultImplementation.isAsyncResult(next)) {
-					next.then((innerResult) => {
-						if (!innerResult.ok) {
-							err(innerResult.error);
-							return;
-						}
-						ok(innerResult.value);
-					});
-
-					return;
-				}
-
-				if (ResultImplementation.isResult(next)) {
-					if (!next.ok) {
-						err(next.error);
-						return;
-					}
-
-					ok(next.value);
-					return;
-				}
-			});
-		});
+		return AsyncResultImplementation.from(
+			flatMapErrorFn(this._promise, callbackFn as any),
+		);
 	}
 
 	catch<U>(
 		callbackFn: (error: E) => U | PromiseLike<U>,
 	): AsyncResult<T | U, never> {
-		return new AsyncResultImplementation<T | U, never>((ok) => {
-			this._promise.then((result) => {
-				if (result.ok) {
-					return ok(result.value);
-				}
-
-				Promise.resolve(callbackFn(result.error)).then(ok);
-			});
-		});
+		return AsyncResultImplementation.from(
+			catchErrorFn(this._promise, callbackFn),
+		);
 	}
 
 	tap(onOk: (value: T) => void | PromiseLike<void>): AsyncResult<T, E> {
-		return new AsyncResultImplementation<T, E>((ok, err) => {
-			this._promise.then((result) => {
-				if (!result.ok) {
-					err(result.error);
-					return;
-				}
-
-				Promise.resolve(onOk(result.value)).then(() =>
-					ok(result.value),
-				);
-			});
-		});
+		return AsyncResultImplementation.from(tapFn(this._promise, onOk));
 	}
 
 	tapError(
 		onError: (error: E) => void | PromiseLike<void>,
 	): AsyncResult<T, E> {
-		return new AsyncResultImplementation<T, E>((ok, err) => {
-			this._promise.then((result) => {
-				if (result.ok) {
-					ok(result.value);
-					return;
-				}
-
-				Promise.resolve(onError(result.error)).then(() =>
-					err(result.error),
-				);
-			});
-		});
+		return AsyncResultImplementation.from(
+			tapErrorFn(this._promise, onError),
+		);
 	}
 
 	finally(onFinally: () => void | PromiseLike<void>): AsyncResult<T, E> {
-		return new AsyncResultImplementation<T, E>((ok, err) => {
-			this._promise.finally(onFinally).then((result) => {
-				if (result.ok) {
-					ok(result.value);
-					return;
-				}
-
-				err(result.error);
-			});
-		});
+		return AsyncResultImplementation.from(
+			tapBothFn(this._promise, onFinally),
+		);
 	}
 
 	match<TValue, TError>(
 		onOk: (value: T) => TValue | PromiseLike<TValue>,
 		onError: (error: E) => TError | PromiseLike<TError>,
 	): Promise<TValue | TError> {
-		return this._promise.then(async (result): Promise<TValue | TError> => {
-			if (!result.ok) {
-				return await Promise.resolve(onError(result.error));
-			}
-
-			return await Promise.resolve(onOk(result.value));
-		});
+		return this._promise.then(matchFn(onOk, onError));
 	}
 
 	get [Symbol.toStringTag](): 'AsyncResult' {

@@ -32,5 +32,5 @@ export const dual: {
 	}
 };
 
-export const isPromiseLike = (v: unknown): v is PromiseLike<unknown> =>
+export const isPromiseLike = <T = unknown>(v: unknown): v is PromiseLike<T> =>
 	!!v && typeof (v as any).then === 'function';

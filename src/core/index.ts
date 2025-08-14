@@ -64,7 +64,7 @@ export function from<R extends MaybeAsyncResult<any, any>>(
 	result: R,
 ): MaybeAsyncResult<ResolveOkValue<R>, ResolveErrorValue<R>> {
 	if (isPromiseLike(result)) {
-		return Promise.resolve(result.then(from));
+		return result.then(from);
 	}
 
 	return (result as Result<any, any>).ok
