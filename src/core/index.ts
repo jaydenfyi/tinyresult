@@ -64,9 +64,7 @@ export function from<R extends MaybeAsyncResult<any, any>>(
 	result: R,
 ): MaybeAsyncResult<ResolveOkValue<R>, ResolveErrorValue<R>> {
 	if (isPromiseLike(result)) {
-		return Promise.resolve(
-			(result as PromiseLike<Result<any, any>>).then(from),
-		);
+		return Promise.resolve(result.then(from));
 	}
 
 	return (result as Result<any, any>).ok
@@ -161,21 +159,38 @@ export function all<R extends readonly MaybeAsyncResult<any, any>[]>(
  */
 export const map: {
 	// data-last
-	<R extends MaybeAsyncResult<any, any>, U>(
-		fn: (v: ResolveOkValue<R>) => U,
-	): (result: R) => ResultFor<[R], U, ResolveErrorValue<R>>;
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (v: ResolveOkValue<R>) => any,
+	>(
+		fn: F,
+	): (
+		result: R,
+	) => ResultFor<
+		[R, ReturnType<F>],
+		Awaited<ReturnType<F>>,
+		ResolveErrorValue<R>
+	>;
 
 	// data-first
-	<R extends MaybeAsyncResult<any, any>, U>(
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (v: ResolveOkValue<R>) => any,
+	>(
 		result: R,
-		fn: (v: ResolveOkValue<R>) => U,
-	): ResultFor<[R], U, ResolveErrorValue<R>>;
+		fn: F,
+	): ResultFor<
+		[R, ReturnType<F>],
+		Awaited<ReturnType<F>>,
+		ResolveErrorValue<R>
+	>;
 } = dual(2, (result: MaybeAsyncResult<any, any>, fn: (v: any) => any): any => {
-	if (isPromiseLike(result)) {
-		return result.then(map(fn));
-	}
+	if (isPromiseLike(result)) return result.then(map(fn));
+	if (!result.ok) return error(result.error);
 
-	return result.ok ? ok(fn(result.value)) : error(result.error);
+	const out = fn(result.value);
+	if (isPromiseLike(out)) return out.then(ok);
+	return ok(out);
 });
 
 /**
@@ -244,21 +259,34 @@ export const flatMap: {
  */
 export const mapError: {
 	// data-last
-	<R extends MaybeAsyncResult<any, any>, F>(
-		fn: (e: ResolveErrorValue<R>) => F,
-	): (result: R) => ResultFor<[R], ResolveOkValue<R>, F>;
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (e: ResolveErrorValue<R>) => any,
+	>(
+		fn: F,
+	): (
+		result: R,
+	) => ResultFor<
+		[R, ReturnType<F>],
+		ResolveOkValue<R>,
+		Awaited<ReturnType<F>>
+	>;
 
 	// data-first
-	<R extends MaybeAsyncResult<any, any>, F>(
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (e: ResolveErrorValue<R>) => any,
+	>(
 		result: R,
-		fn: (e: ResolveErrorValue<R>) => F,
-	): ResultFor<[R], ResolveOkValue<R>, F>;
+		fn: F,
+	): ResultFor<[R, ReturnType<F>], ResolveOkValue<R>, Awaited<ReturnType<F>>>;
 } = dual(2, (result: MaybeAsyncResult<any, any>, fn: (e: any) => any): any => {
-	if (isPromiseLike(result)) {
-		return result.then(mapError(fn));
-	}
+	if (isPromiseLike(result)) return result.then(mapError(fn));
+	if (result.ok) return ok(result.value);
 
-	return result.ok ? ok(result.value) : error(fn(result.error));
+	const out = fn(result.error);
+	if (isPromiseLike(out)) return out.then(error);
+	return error(out);
 });
 
 /**
@@ -329,21 +357,38 @@ export const flatMapError: {
  */
 export const catchError: {
 	// data-last
-	<R extends MaybeAsyncResult<any, any>, U>(
-		fn: (e: ResolveErrorValue<R>) => U,
-	): (result: R) => ResultFor<[R], ResolveOkValue<R> | U, never>;
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (e: ResolveErrorValue<R>) => any,
+	>(
+		fn: F,
+	): (
+		result: R,
+	) => ResultFor<
+		[R, ReturnType<F>],
+		ResolveOkValue<R> | Awaited<ReturnType<F>>,
+		never
+	>;
 
 	// data-first
-	<R extends MaybeAsyncResult<any, any>, U>(
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (e: ResolveErrorValue<R>) => any,
+	>(
 		result: R,
-		fn: (e: ResolveErrorValue<R>) => U,
-	): ResultFor<[R], ResolveOkValue<R> | U, never>;
+		fn: F,
+	): ResultFor<
+		[R, ReturnType<F>],
+		ResolveOkValue<R> | Awaited<ReturnType<F>>,
+		never
+	>;
 } = dual(2, (result: MaybeAsyncResult<any, any>, fn: (e: any) => any): any => {
-	if (isPromiseLike(result)) {
-		return result.then(catchError(fn));
-	}
+	if (isPromiseLike(result)) return result.then(catchError(fn));
+	if (result.ok) return ok(result.value);
 
-	return result.ok ? ok(result.value) : ok(fn(result.error));
+	const out = fn(result.error);
+	if (isPromiseLike(out)) return out.then(ok);
+	return ok(out);
 });
 
 export { catchError as catch };
@@ -353,24 +398,40 @@ export { catchError as catch };
  * Works for both sync and async transparently.
  */
 export const tap: {
-	<R extends MaybeAsyncResult<any, any>>(
-		onOk: (v: ResolveOkValue<R>) => void,
-	): (result: R) => R;
-	<R extends MaybeAsyncResult<any, any>>(
+	// data-last
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (v: ResolveOkValue<R>) => unknown | Promise<unknown>,
+	>(
+		onOk: F,
+	): (
 		result: R,
-		onOk: (v: ResolveOkValue<R>) => void,
-	): R;
+	) => R extends PromiseLike<any>
+		? R
+		: ReturnType<F> extends PromiseLike<any>
+			? Promise<ResolveResult<R>>
+			: ResolveResult<R>;
+
+	// data-first
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (v: ResolveOkValue<R>) => unknown | Promise<unknown>,
+	>(
+		result: R,
+		onOk: F,
+	): R extends PromiseLike<any>
+		? R
+		: ReturnType<F> extends PromiseLike<any>
+			? Promise<ResolveResult<R>>
+			: ResolveResult<R>;
 } = dual(
 	2,
 	(result: MaybeAsyncResult<any, any>, onOk: (v: any) => void): any => {
-		if (isPromiseLike(result)) {
-			return result.then(tap(onOk));
-		}
+		if (isPromiseLike(result)) return result.then(tap(onOk));
+		if (!result.ok) return result;
 
-		if (result.ok) {
-			onOk(result.value);
-		}
-
+		const out = onOk(result.value);
+		if (isPromiseLike(out)) return out.then(() => result);
 		return result;
 	},
 );
@@ -380,24 +441,40 @@ export const tap: {
  * Works for both sync and async transparently.
  */
 export const tapError: {
-	<R extends MaybeAsyncResult<any, any>>(
-		onError: (e: ResolveErrorValue<R>) => void,
-	): (result: R) => R;
-	<R extends MaybeAsyncResult<any, any>>(
+	// data-last
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (e: ResolveErrorValue<R>) => unknown | Promise<unknown>,
+	>(
+		onError: F,
+	): (
 		result: R,
-		onError: (e: ResolveErrorValue<R>) => void,
-	): R;
+	) => R extends PromiseLike<any>
+		? R
+		: ReturnType<F> extends PromiseLike<any>
+			? Promise<ResolveResult<R>>
+			: ResolveResult<R>;
+
+	// data-first
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (e: ResolveErrorValue<R>) => unknown | Promise<unknown>,
+	>(
+		result: R,
+		onError: F,
+	): R extends PromiseLike<any>
+		? R
+		: ReturnType<F> extends PromiseLike<any>
+			? Promise<ResolveResult<R>>
+			: ResolveResult<R>;
 } = dual(
 	2,
 	(result: MaybeAsyncResult<any, any>, onError: (e: any) => void): any => {
-		if (isPromiseLike(result)) {
-			return result.then(tapError(onError));
-		}
+		if (isPromiseLike(result)) return result.then(tapError(onError));
+		if (result.ok) return result;
 
-		if (!result.ok) {
-			onError(result.error);
-		}
-
+		const out = onError(result.error);
+		if (isPromiseLike(out)) return out.then(() => result);
 		return result;
 	},
 );
@@ -407,22 +484,39 @@ export const tapError: {
  * Works for both sync and async transparently.
  */
 export const tapBoth: {
-	<R extends MaybeAsyncResult<any, any>>(
-		onFinally: (r: ResolveResult<R>) => void,
-	): (result: R) => R;
-	<R extends MaybeAsyncResult<any, any>>(
+	// data-last
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (r: ResolveResult<R>) => unknown | Promise<unknown>,
+	>(
+		onFinally: F,
+	): (
 		result: R,
-		onFinally: (r: ResolveResult<R>) => void,
-	): R;
+	) => R extends PromiseLike<any>
+		? R
+		: ReturnType<F> extends PromiseLike<any>
+			? Promise<ResolveResult<R>>
+			: ResolveResult<R>;
+
+	// data-first
+	<
+		R extends MaybeAsyncResult<any, any>,
+		F extends (r: ResolveResult<R>) => unknown | Promise<unknown>,
+	>(
+		result: R,
+		onFinally: F,
+	): R extends PromiseLike<any>
+		? R
+		: ReturnType<F> extends PromiseLike<any>
+			? Promise<ResolveResult<R>>
+			: ResolveResult<R>;
 } = dual(
 	2,
 	(result: MaybeAsyncResult<any, any>, onFinally: (r: any) => void): any => {
-		if (isPromiseLike(result)) {
-			return result.then(tapBoth(onFinally));
-		}
+		if (isPromiseLike(result)) return result.then(tapBoth(onFinally));
 
-		onFinally(result);
-
+		const out = onFinally(result);
+		if (isPromiseLike(out)) return out.then(() => result);
 		return result;
 	},
 );
@@ -453,9 +547,7 @@ export const match: {
 		onOk: (v: any) => any,
 		onError: (e: any) => any,
 	): any => {
-		if (isPromiseLike(result)) {
-			return result.then(match(onOk, onError));
-		}
+		if (isPromiseLike(result)) return result.then(match(onOk, onError));
 
 		return result.ok ? onOk(result.value) : onError(result.error);
 	},

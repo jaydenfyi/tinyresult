@@ -10,6 +10,7 @@ import {
 	tapError as tapErrorFn,
 	tryCatch as tryCatchFn,
 	all as allFn,
+	from as fromFn,
 	type Result as ResultLike,
 	type MaybeAsyncResult as MaybeAsyncResultLike,
 	type ResolveOkValue,
@@ -101,7 +102,7 @@ export interface AsyncResultPrototype<T, E> {
 	map<U>(callbackFn: (value: T) => U | PromiseLike<U>): AsyncResult<U, E>;
 
 	flatMap<U, F = E>(
-		callbackFn: (value: T) => Result<U, F> | AsyncResult<U, F>,
+		callbackFn: (value: T) => Result<U, F> | PromiseLike<Result<U, F>>,
 	): AsyncResult<U, E | F>;
 
 	mapError<F>(callbackFn: (error: E) => F): AsyncResult<T, F>;
@@ -250,7 +251,10 @@ export class ResultImplementation<T, E = unknown>
 
 	map<U>(callbackFn: (value: T) => U): Result<U, E> {
 		return ResultImplementation.from(
-			mapFn(this as unknown as Result<T, E>, callbackFn),
+			mapFn(this as unknown as Result<T, E>, callbackFn) as ResultLike<
+				U,
+				E
+			>,
 		);
 	}
 
@@ -280,7 +284,10 @@ export class ResultImplementation<T, E = unknown>
 
 	mapError<F>(callbackFn: (error: E) => F): Result<T, F> {
 		return ResultImplementation.from(
-			mapErrorFn(this as unknown as Result<T, E>, callbackFn),
+			mapErrorFn(
+				this as unknown as Result<T, E>,
+				callbackFn,
+			) as ResultLike<T, F>,
 		);
 	}
 
@@ -311,13 +318,19 @@ export class ResultImplementation<T, E = unknown>
 
 	catch<U>(callbackFn: (error: E) => U): Result<T | U, never> {
 		return ResultImplementation.from(
-			catchErrorFn(this as unknown as Result<T, E>, callbackFn),
+			catchErrorFn(
+				this as unknown as Result<T, E>,
+				callbackFn,
+			) as ResultLike<T | U, never>,
 		);
 	}
 
 	tap(onOk: (value: T) => void): Result<T, E> {
 		return ResultImplementation.from(
-			tapFn(this as unknown as Result<T, E>, onOk as (value: T) => void),
+			tapFn(
+				this as unknown as Result<T, E>,
+				onOk as (value: T) => void,
+			) as ResultLike<T, E>,
 		);
 	}
 
@@ -326,13 +339,16 @@ export class ResultImplementation<T, E = unknown>
 			tapErrorFn(
 				this as unknown as Result<T, E>,
 				onError as (error: E) => void,
-			),
+			) as ResultLike<T, E>,
 		);
 	}
 
 	finally(onFinally: () => void): Result<T, E> {
 		return ResultImplementation.from(
-			tapBothFn(this as unknown as Result<T, E>, onFinally),
+			tapBothFn(this as unknown as Result<T, E>, onFinally) as ResultLike<
+				T,
+				E
+			>,
 		);
 	}
 
@@ -345,6 +361,10 @@ export class ResultImplementation<T, E = unknown>
 
 	get [Symbol.toStringTag](): 'Result' {
 		return 'Result';
+	}
+
+	toJSON(): ResultLikeInternal<T, E> {
+		return fromFn(this as unknown as Result<T, E>);
 	}
 }
 
@@ -448,39 +468,42 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 	flatMap<U, F = E>(
 		callbackFn: (value: T) => Result<U, F> | AsyncResult<U, F>,
 	): AsyncResult<U, E | F> {
-		return new AsyncResultImplementation<U, E | F>((ok, err) => {
-			this._promise.then((result) => {
-				if (!result.ok) {
-					err(result.error);
-					return;
-				}
+		return AsyncResultImplementation.from(
+			flatMapFn(this._promise, callbackFn as any),
+		);
+		// return new AsyncResultImplementation<U, E | F>((ok, err) => {
+		// 	this._promise.then((result) => {
+		// 		if (!result.ok) {
+		// 			err(result.error);
+		// 			return;
+		// 		}
 
-				const next = callbackFn(result.value);
+		// 		const next = callbackFn(result.value);
 
-				if (AsyncResultImplementation.isAsyncResult(next)) {
-					next.then((innerResult) => {
-						if (!innerResult.ok) {
-							err(innerResult.error);
-							return;
-						}
+		// 		if (AsyncResultImplementation.isAsyncResult(next)) {
+		// 			next.then((innerResult) => {
+		// 				if (!innerResult.ok) {
+		// 					err(innerResult.error);
+		// 					return;
+		// 				}
 
-						ok(innerResult.value);
-						return;
-					});
-					return;
-				}
+		// 				ok(innerResult.value);
+		// 				return;
+		// 			});
+		// 			return;
+		// 		}
 
-				if (ResultImplementation.isResult(next)) {
-					if (!next.ok) {
-						err(next.error);
-						return;
-					}
+		// 		if (ResultImplementation.isResult(next)) {
+		// 			if (!next.ok) {
+		// 				err(next.error);
+		// 				return;
+		// 			}
 
-					ok(next.value);
-					return;
-				}
-			});
-		});
+		// 			ok(next.value);
+		// 			return;
+		// 		}
+		// 	});
+		// });
 	}
 
 	mapError<F>(

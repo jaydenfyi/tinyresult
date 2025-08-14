@@ -26,12 +26,12 @@
 		{
 			"path": "dist/index.js",
 			"gzip": true,
-			"limit": "1.2 KB"
+			"limit": "1.25 KB"
 		},
 		{
 			"path": "dist/core/index.js",
 			"gzip": true,
-			"limit": "0.8 KB"
+			"limit": "0.75 KB"
 		}
 	],
 	"scripts": {

@@ -556,6 +556,93 @@ describe('AsyncResult', () => {
 			if (!flatMapped.ok) throw new Error('Result should be ok');
 			expect(flatMapped.value).toBe(5);
 		});
+
+		// test('should return an AsyncResult if the flatMap callback returns a promise', async () => {
+		// 	const result = AsyncResult.ok(5);
+		// 	const flatMapped = result
+		// 		.flatMap(async (value) => {
+		// 			console.log('Fetching value...');
+		// 			// wait for 1 second to simulate async operation
+		// 			await new Promise((resolve) => setTimeout(resolve, 3000));
+		// 			console.log('Fetched value.');
+		// 			return AsyncResult.ok(value * 2);
+		// 		})
+		// 		.tap(async (value) => {
+		// 			console.log('Time now: ', new Date().toISOString());
+		// 			await new Promise((resolve) => setTimeout(resolve, 1000));
+		// 			console.log(
+		// 				'Time after 1 second: ',
+		// 				new Date().toISOString(),
+		// 			);
+		// 			console.log(`Tapped value: ${value}`);
+		// 		});
+		// 	expect(AsyncResult.isAsyncResult(flatMapped)).toBe(true);
+		// 	const resolvedResult = await flatMapped;
+		// 	expect(resolvedResult.ok).toBe(true);
+		// 	if (!resolvedResult.ok) throw new Error('Result should be ok');
+		// 	expect(resolvedResult.value).toBe(10);
+		// });
+
+		// test tracking the time passed throughout async chain of operations
+		// test('should track time passed throughout async chain of operations', async () => {
+		// 	const result = AsyncResult.ok({
+		// 		start: new Date().toISOString(),
+		// 		timePassed: [] as number[],
+		// 	})
+		// 		.flatMap(async (value) => {
+		// 			console.log('Fetching value...');
+		// 			value.timePassed.push(
+		// 				new Date().getTime() - new Date(value.start).getTime(),
+		// 			);
+		// 			console.log(value.timePassed);
+		// 			// wait for 1 second to simulate async operation
+		// 			await new Promise((resolve) => setTimeout(resolve, 1000));
+		// 			console.log('Fetched value.');
+		// 			const timePassed =
+		// 				new Date().getTime() - new Date(value.start).getTime();
+		// 			value.timePassed.push(timePassed);
+		// 			console.log(value.timePassed);
+		// 			return AsyncResult.ok(value);
+		// 		})
+		// 		.map(async (value) => {
+		// 			console.log('Mapping value...');
+		// 			// wait for 1 second to simulate async operation
+		// 			await new Promise((resolve) => setTimeout(resolve, 1000));
+		// 			console.log('Mapped value.');
+		// 			const timePassed =
+		// 				new Date().getTime() - new Date(value.start).getTime();
+		// 			value.timePassed.push(timePassed);
+		// 			console.log(value.timePassed);
+		// 			await new Promise((resolve) => setTimeout(resolve, 500));
+		// 			return value;
+		// 		})
+		// 		.tap(async (value) => {
+		// 			console.log(
+		// 				'ms since start:',
+		// 				new Date().getTime() - new Date(value.start).getTime(),
+		// 			);
+		// 			console.log(`Tapped value: ${JSON.stringify(value)}`);
+		// 		})
+		// 		.flatMap(async (value) => {
+		// 			console.log('Finalizing value...');
+		// 			const timePassed =
+		// 				new Date().getTime() - new Date(value.start).getTime();
+		// 			value.timePassed.push(timePassed);
+		// 			return AsyncResult.ok(value);
+		// 		});
+
+		// 	console.log('Unresolved result:', result);
+		// 	expect(AsyncResult.isAsyncResult(result)).toBe(true);
+		// 	const resolvedResult = await result;
+		// 	console.log('Resolved result:', resolvedResult);
+		// 	expect(resolvedResult.ok).toBe(true);
+		// 	if (!resolvedResult.ok) throw new Error('Result should be ok');
+		// 	expect(resolvedResult.value.timePassed.length).toBe(4);
+		// 	expect(resolvedResult.value.timePassed[0]).toBeGreaterThan(0);
+		// 	expect(resolvedResult.value.timePassed[1]).toBeGreaterThan(0);
+		// 	expect(resolvedResult.value.timePassed[2]).toBeGreaterThan(0);
+		// 	console.log('Final value:', resolvedResult.value);
+		// });
 	});
 
 	describe('AsyncResult.prototype.mapError', () => {
@@ -673,7 +760,7 @@ describe('AsyncResult', () => {
 		test('should return the value from onOk if ok', async () => {
 			const result = AsyncResult.ok('value').tap(async (value) => {
 				console.log('Time now: ', new Date().toISOString());
-				await new Promise((resolve) => setTimeout(resolve, 1000));
+				// await new Promise((resolve) => setTimeout(resolve, 1000));
 				console.log('Time after 1 second: ', new Date().toISOString());
 				console.log(`Tapped value: ${value}`);
 			});

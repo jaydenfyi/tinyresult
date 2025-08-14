@@ -15,7 +15,8 @@ import {
 	tapError,
 	tapBoth,
 	match,
-	Result as ResultLike,
+	Result,
+	pipe,
 } from './index.js';
 
 describe('core', () => {
@@ -133,7 +134,7 @@ describe('core', () => {
 		test('flattens error mapping', () => {
 			const r = flatMapError(error('e'), (e) =>
 				error(`err:${e}`),
-			) as ResultLike<never, string>;
+			) as Result<never, string>;
 			expect(r).toEqual({ ok: false, error: 'err:e' });
 		});
 
@@ -224,3 +225,122 @@ describe('core', () => {
 		});
 	});
 });
+
+// describe('pipe map test', () => {
+// 	test('should correctly handle async operations', async () => {
+// 		console.log('Starting pipe test...');
+// 		const startTime = new Date().toISOString();
+// 		console.log('Start time:', startTime);
+// 		const result = await pipe(
+// 			ok(2),
+// 			flatMap((x) => ok(x + 1)),
+// 			map((x) => x * 2),
+// 			flatMap(async (x) => {
+// 				// Simulate an async operation
+// 				await new Promise((resolve) => setTimeout(resolve, 100));
+// 				return ok(x - 1);
+// 			}),
+// 			// tap(async (x) => {
+// 			// 	await new Promise((resolve) => setTimeout(resolve, 2000));
+// 			// 	console.log('Final value:', x);
+// 			// }),
+// 			tap(async (x) => {
+// 				// Simulate another async operation
+// 				await new Promise((resolve) => setTimeout(resolve, 2000));
+// 				const ellapsedMs = Date.now() - new Date(startTime).getTime();
+// 				console.log({
+// 					time: new Date().toISOString(),
+// 					value: x,
+// 					ellapsedMs,
+// 				});
+// 			}),
+// 		);
+// 		console.log('Result:', result);
+// 		expect(result).toEqual({ ok: true, value: 5 });
+// 	});
+// });
+
+// test('should handle async map', async () => {
+// 	const checkAsyncMap = map(ok(1), (v) => v + 1);
+// 	const foo = mapError(
+// 		map({ ok: true, value: 1 }, (v) => `Number is ${v}` as const),
+// 		(e) => `Error: ${e}` as const,
+// 	);
+
+// 	console.log('checkAsyncMap:', checkAsyncMap);
+// 	expect(checkAsyncMap).toEqual({ ok: true, value: 2 });
+// });
+
+// const asyncOk = Promise.resolve(ok(1 as const));
+// test('should handle async map (pipe)', async () => {
+// 	const startTime = new Date().toISOString();
+// 	const result = pipe(
+// 		{ ok: true, value: 1 } as const,
+// 		tap((v) => {
+// 			console.log('Value before flatMap:', v);
+// 		}),
+// 		flatMap(async (v) => ok(v + 1)),
+// 		flatMap((v) => {
+// 			return tryCatch(() => {
+// 				return v + 1;
+// 			});
+// 		}),
+// 		tap((v) => {
+// 			console.log('Value after flatMap:', v);
+// 		}),
+// 		tapBoth(async (v) => {
+// 			console.log('Just hanging out for 2 seconds...', v);
+// 			await new Promise((resolve) => setTimeout(resolve, 2_000));
+// 			console.log('Done hanging out!');
+// 		}),
+// 		map((v) => `Number is ${v}` as const),
+// 		// match(
+// 		// 	(v) => v,
+// 		// 	(e) => `Error: ${e}` as const,
+// 		// ),
+// 	);
+
+// 	const concurrencyTest = all([
+// 		result,
+// 		pipe(
+// 			{ ok: true, value: 1 } as const,
+// 			tap((v) => {
+// 				console.log('inline started...');
+// 				console.log('Value before flatMap:', v);
+// 			}),
+// 			flatMap(async (v) => ok(v + 1)),
+// 			flatMap((v) => {
+// 				return tryCatch(() => {
+// 					return v + 1;
+// 				});
+// 			}),
+// 			tap((v) => {
+// 				console.log('Value after flatMap:', v);
+// 			}),
+// 			tapBoth(async (v) => {
+// 				console.log('Just hanging out for 2 seconds...', v);
+// 				await new Promise((resolve) => setTimeout(resolve, 10));
+// 				console.log('Done hanging out!');
+// 			}),
+// 			map((v) => `Number is ${v}` as const),
+// 			tapBoth((v) => {
+// 				console.log('inline done', v);
+// 			}),
+// 			// match(
+// 			// 	(v) => v,
+// 			// 	(e) => `Error: ${e}` as const,
+// 			// ),
+// 		),
+// 	]);
+
+// 	console.log('concurrencyTest:', await concurrencyTest);
+
+// 	const endTime = new Date().toISOString();
+// 	console.log('Time ellapsed:', {
+// 		startTime,
+// 		endTime,
+// 		ellapsedMs: new Date(endTime).getTime() - new Date(startTime).getTime(),
+// 	});
+// 	console.log('Result:', result);
+// 	expect(await result).toEqual(ok('Number is 3' as const));
+// });
