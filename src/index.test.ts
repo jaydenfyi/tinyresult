@@ -322,10 +322,18 @@ describe('Result', () => {
 			const result = Result.ok(5)
 				.map((value) => value * 2)
 				.flatMap((value) => Result.ok(value + 3))
-				.mapError((error) => `Error: ${error}`)
-				.tap((value) => console.log(`Value: ${value}`))
-				.catch((error) => `Caught: ${error}`)
-				.finally(() => console.log('Done'));
+				.mapError((error) => `Error: ${error}` as const)
+				// .tap((value) => console.log(`Value: ${value}`))
+				// .tapError((error) => console.error(`Error: ${error}`))
+				.catch((error) => `Caught: ${error}` as const);
+			// .finally(() => {
+			// 	console.log('Done');
+			// 	// return 'Finalized' as const;
+			// });
+			// .match(
+			// 	(value) => `Final value: ${value}` as const,
+			// 	(error) => `Final error: ${error}` as const,
+			// );
 
 			expect(result.ok).toBe(true);
 			if (!result.ok) throw new Error('Result should be ok');
