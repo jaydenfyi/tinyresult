@@ -18,6 +18,8 @@ import {
 	Result,
 	pipe,
 	type AsyncResult,
+	wrap,
+	fromPromise,
 } from './index.js';
 
 describe('core', () => {
@@ -71,6 +73,36 @@ describe('core', () => {
 			// from() only handles Promise<Result>, so make the inner promise resolve to a Result
 			const r = from(nested.then((p) => p as Result<string, never>));
 			await expect(r).resolves.toEqual({ ok: true, value: 'deep' });
+		});
+	});
+
+	describe('fromPromise', () => {
+		test('unwraps a promise that resolves', async () => {
+			const r = fromPromise(Promise.resolve(42 as const));
+
+			console.log('r:', String(r));
+			expectTypeOf(r).toEqualTypeOf<AsyncResult<42, unknown>>();
+			await expect(r).resolves.toEqual({ ok: true, value: 42 });
+		});
+
+		test('unwraps a promise that rejects', async () => {
+			const r = fromPromise(Promise.reject('error' as const));
+			expectTypeOf(r).toEqualTypeOf<AsyncResult<never, unknown>>();
+			await expect(r).resolves.toEqual({ ok: false, error: 'error' });
+		});
+
+		test('maps the error if the promise rejects', async () => {
+			const r = fromPromise(
+				Promise.reject('error' as const),
+				(e) => `mapped:${e}` as const,
+			);
+			expectTypeOf(r).toEqualTypeOf<
+				AsyncResult<never, `mapped:${string}`>
+			>();
+			await expect(r).resolves.toEqual({
+				ok: false,
+				error: 'mapped:error',
+			});
 		});
 	});
 
@@ -134,6 +166,106 @@ describe('core', () => {
 				(e) => (e as Error).message,
 			);
 			await expect(r).resolves.toEqual({ ok: false, error: 'kapow' });
+		});
+	});
+
+	/* ────────────────────────────────────────────────────────────────────────── *
+	 * wrap
+	 * ────────────────────────────────────────────────────────────────────────── */
+
+	describe('wrap', () => {
+		test('returns OkResult when function returns normally (sync)', () => {
+			const f = (n: number) => n + 1;
+			const w = wrap(f);
+			expectTypeOf(w).toEqualTypeOf<
+				(n: number) => Result<number, unknown>
+			>();
+			const r = w(2);
+			expectTypeOf(r).toEqualTypeOf<Result<number, unknown>>();
+			expect(r).toEqual({ ok: true, value: 3 });
+		});
+
+		test('returns ErrorResult when function throws (sync)', () => {
+			const err = new Error('boom');
+			const f = () => {
+				throw err; // inferred () => never
+			};
+			expectTypeOf(f).toEqualTypeOf<() => never>();
+			const w = wrap(f);
+			expectTypeOf(w).toEqualTypeOf<() => Result<never, unknown>>();
+			const r = w();
+			expect(r).toEqual({ ok: false, error: err });
+		});
+
+		test('maps thrown error with mapError (sync)', () => {
+			const w = wrap(
+				() => {
+					throw 'x';
+				},
+				(e) => `mapped:${String(e)}` as const,
+			);
+			expectTypeOf(w).toEqualTypeOf<
+				() => Result<never, `mapped:${string}`>
+			>();
+			const r = w();
+			expectTypeOf(r).toEqualTypeOf<Result<never, `mapped:${string}`>>();
+			expect(r).toEqual({ ok: false, error: 'mapped:x' });
+		});
+
+		test('returns OkResult when async function resolves', async () => {
+			const f = async (s: string) => s.toUpperCase();
+			const w = wrap(f);
+			const r = w('hi');
+			await expect(r).resolves.toEqual({ ok: true, value: 'HI' });
+		});
+
+		test('returns ErrorResult when async function rejects', async () => {
+			const f = async () => {
+				throw new Error('kapow');
+			};
+			expectTypeOf(f).toEqualTypeOf<() => Promise<never>>();
+			const w = wrap(f, (e) => (e as Error).message);
+			expectTypeOf(w).toEqualTypeOf<() => AsyncResult<never, string>>();
+			const r = w();
+			expectTypeOf(r).toEqualTypeOf<AsyncResult<never, string>>();
+			await expect(r).resolves.toEqual({ ok: false, error: 'kapow' });
+		});
+
+		test('passes through arguments to wrapped function', () => {
+			const f = (a: number, b: number, c: number) => a + b + c;
+			const w = wrap(f);
+			expectTypeOf(w).toEqualTypeOf<
+				(a: number, b: number, c: number) => Result<number, unknown>
+			>();
+			const r = w(1, 2, 3);
+			expectTypeOf(r).toEqualTypeOf<Result<number, unknown>>();
+			expect(r).toEqual({ ok: true, value: 6 });
+		});
+
+		test('type: sync function -> Result<Ok, Err>', () => {
+			const w = wrap(() => 42 as const);
+			expectTypeOf(w).toEqualTypeOf<() => Result<42, unknown>>();
+			const r = w();
+			expectTypeOf(r).toEqualTypeOf<Result<42, unknown>>();
+		});
+
+		test('type: throwing sync function -> Result<never, Err>', () => {
+			const w = wrap(
+				() => {
+					throw 'x';
+				},
+				(_): 'E' => 'E',
+			);
+			expectTypeOf(w).toEqualTypeOf<() => Result<never, 'E'>>();
+			const r = w();
+			expectTypeOf(r).toEqualTypeOf<Result<never, 'E'>>();
+		});
+
+		test('type: async function -> AsyncResult<Ok, Err>', () => {
+			const w = wrap(async () => 7 as const);
+			expectTypeOf(w).toEqualTypeOf<() => AsyncResult<7, unknown>>();
+			const r = w();
+			expectTypeOf(r).toEqualTypeOf<AsyncResult<7, unknown>>();
 		});
 	});
 

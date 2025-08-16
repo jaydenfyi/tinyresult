@@ -2,12 +2,12 @@ import { dual, isPromiseLike } from './internal.js';
 
 export { pipe } from './pipe.js';
 
-export interface OkResult<T> {
+interface OkResult<T> {
 	readonly ok: true;
 	readonly value: T;
 }
 
-export interface ErrorResult<E> {
+interface ErrorResult<E> {
 	readonly ok: false;
 	readonly error: E;
 }
@@ -46,14 +46,29 @@ export type ExtractErrorResultValue<
 	R extends readonly MaybeAsyncResult<any, any>[],
 > = ResolveErrorValue<R[number]>;
 
+/**
+ * Creates a `Result` with `ok: true` and the given value.
+ * @param value Value to wrap.
+ * @returns A successful `Result`.
+ */
 export function ok<T>(value: T): Result<T, never> {
 	return { ok: true, value };
 }
 
+/**
+ * Creates a `Result` with `ok: false` and the given error.
+ * @param error Error to wrap.
+ * @returns A failed `Result`.
+ */
 export function error<E>(error: E): Result<never, E> {
 	return { ok: false, error };
 }
 
+/**
+ * Creates a `Result` or `AsyncResult` from a ResultLike value.
+ * @param result Value to convert.
+ * @returns A `Result` or `AsyncResult`.
+ */
 export function from<R extends AsyncResult<any, any>>(
 	result: R,
 ): AsyncResult<ResolveOkValue<R>, ResolveErrorValue<R>>;
@@ -72,6 +87,26 @@ export function from<R extends MaybeAsyncResult<any, any>>(
 		: error((result as ErrorResult<any>).error);
 }
 
+/**
+ * Wraps a promise in an `AsyncResult`, mapping rejection to `Error`.
+ * @param onError Optional function to map rejection reason.
+ * @returns An `AsyncResult` for the promise.
+ */
+export function fromPromise<T, E = unknown>(
+	promise: PromiseLike<T>,
+	onError?: (reason: unknown) => E,
+): AsyncResult<T, E> {
+	return Promise.resolve(promise).then(
+		(v) => ok<T>(v),
+		(r) => error<E>(onError ? onError(r) : (r as E)),
+	);
+}
+
+/**
+ * Checks if a value is a `Result`.
+ * @param value Value to check.
+ * @returns `true` if the value is a `Result`.
+ */
 export function isResult(value: unknown): value is Result<unknown, unknown> {
 	return (
 		!!value &&
@@ -82,6 +117,12 @@ export function isResult(value: unknown): value is Result<unknown, unknown> {
 	);
 }
 
+/**
+ * Runs a function and captures thrown errors or rejections in a `Result`.
+ * @param fn Function to run.
+ * @param onError Optional function to map errors.
+ * @returns The function output as a `Result` or `AsyncResult`.
+ */
 export function tryCatch<T>(fn: () => PromiseLike<T>): AsyncResult<T, unknown>;
 export function tryCatch<T>(fn: () => T): Result<T, unknown>;
 export function tryCatch<T, F>(
@@ -113,12 +154,59 @@ export function tryCatch<T, F = unknown>(
 
 export { tryCatch as try };
 
+/**
+ * Wraps a function, returning a new function that yields a `Result`/`AsyncResult`.
+ * Normal returns become `OkResult`; thrown/rejected errors become `ErrorResult` (optionally mapped).
+ * @param fn Function to wrap.
+ * @param mapError Optional mapper for a caught or rejected error.
+ * @returns A function with the same parameters returning a `Result` or `AsyncResult`.
+ */
+export function wrap<F extends (...args: any[]) => never, E = unknown>(
+	fn: F,
+	mapError?: (e: unknown) => E,
+): (...args: Parameters<F>) => Result<never, E>;
+export function wrap<
+	F extends (...args: any[]) => PromiseLike<any>,
+	E = unknown,
+>(
+	fn: F,
+	mapError?: (e: unknown) => E,
+): (...args: Parameters<F>) => AsyncResult<Awaited<ReturnType<F>>, E>;
+export function wrap<F extends (...args: any[]) => any, E = unknown>(
+	fn: F,
+	mapError?: (e: unknown) => E,
+): (...args: Parameters<F>) => Result<ReturnType<F>, E>;
+export function wrap(
+	fn: (...args: any[]) => any,
+	mapError?: (e: unknown) => unknown,
+) {
+	return (...args: any[]) => {
+		try {
+			const out = fn(...args);
+			if (isPromiseLike(out)) {
+				return Promise.resolve(out).then(
+					(v) => ok(v),
+					(e) => error(mapError ? mapError(e) : e),
+				);
+			}
+			return ok(out);
+		} catch (e) {
+			return error(mapError ? mapError(e) : e);
+		}
+	};
+}
+
 type HasAsync<R extends readonly unknown[]> =
 	Extract<R[number], PromiseLike<any>> extends never ? false : true;
 
 type RewrapArray<R extends readonly MaybeAsyncResult<any, any>[], T, E> =
 	HasAsync<R> extends true ? AsyncResult<T, E> : Result<T, E>;
 
+/**
+ * Maps the `OkResult` to a new value.
+ * @param fn Mapper for the `OkResult`.
+ * @returns A mapper (data-last) or the mapped `Result`/`AsyncResult` (data-first).
+ */
 export function all<R extends readonly MaybeAsyncResult<any, any>[]>(
 	results: R,
 ): RewrapArray<R, ExtractOkResultValues<R>, ExtractErrorResultValue<R>> {
@@ -129,33 +217,59 @@ export function all<R extends readonly MaybeAsyncResult<any, any>[]>(
 			if (!r.ok) return error(r.error) as any;
 			values.push(r.value);
 		}
-
 		return ok(values) as any;
 	}
 
-	return Promise.all(results).then((resolved) => {
-		const values: any[] = [];
-		for (const r of resolved) {
-			if (!r.ok) return error(r.error);
-			values.push(r.value);
+	const values: any[] = new Array(results.length);
+	return new Promise((resolve) => {
+		let done = false;
+		let pending = 0;
+
+		for (let i = 0; i < results.length; i++) {
+			const item = results[i];
+
+			if (!isPromiseLike(item)) {
+				const r = item as Result<any, any>;
+				if (!r.ok) {
+					if (done) continue;
+					done = true;
+					resolve(error(r.error) as any);
+					continue;
+				}
+				values[i] = r.value;
+				continue;
+			}
+
+			pending++;
+			(item as Promise<Result<any, any>>).then((r) => {
+				if (done) return;
+				if (!r.ok) {
+					done = true;
+					resolve(error(r.error));
+					return;
+				}
+				values[i] = r.value;
+				pending--;
+				if (!done && pending === 0) {
+					done = true;
+					resolve(ok(values) as any);
+				}
+			});
 		}
 
-		return ok(values);
-	}) as any;
+		if (!done && pending === 0) {
+			done = true;
+			resolve(ok(values) as any);
+		}
+	}) as RewrapArray<R, ExtractOkResultValues<R>, ExtractErrorResultValue<R>>;
 }
 
 /** ── dual versions ───────────────────────────────────────────────────────── */
 
 /**
- * Maps the `Ok` value of a `Result`. If the input is an `AsyncResult`, the output is an `AsyncResult`.
- *
- * Data-last overload: given `fn`, returns a function that accepts either sync or async `Result`.
- *   Input: R (maybe async), Mapper: (Ok<R>) -> U
- *   Output: Result<U, Error<R>> (async iff R is async)
- *
- * Data-first overload: given `result` (maybe async) and `fn`.
- *   Input: R (maybe async), Mapper: (Ok<R>) -> U
- *   Output: Result<U, Error<R>> (async iff R is async)
+ * Transforms the `OkResult` into another `Result`/`AsyncResult`.
+ * @param fn Mapper from `OkResult` to `Result`/`AsyncResult`.
+ * @returns A mapper (data-last) or the chained `Result`/`AsyncResult` (data-first).
  */
 export const map: {
 	// data-last
@@ -194,17 +308,9 @@ export const map: {
 });
 
 /**
- * Maps the `Ok` value of a `Result` to a new `Result`. The output is async if either:
- *   - the input is async OR
- *   - the mapping function returns an `AsyncResult`.
- *
- * Data-last overload:
- *   Input: R (maybe async)
- *   Mapper: (Ok<R>) -> RF (maybe async Result)
- *   Output: Result<Ok<RF>, Error<R> | Error<RF>> (async iff R or RF is async)
- *
- * Data-first overload:
- *   Same as above but with `(result, fn)` order.
+ * Transforms the `OkResult` into another `Result`/`AsyncResult`.
+ * @param fn Mapper from `OkResult` to `Result`/`AsyncResult`.
+ * @returns A mapper (data-last) or the chained `Result`/`AsyncResult` (data-first).
  */
 export const flatMap: {
 	// data-last
@@ -248,14 +354,9 @@ export const flatMap: {
 );
 
 /**
- * Maps the `Error` value of a `Result`. If the input is an `AsyncResult`, the output is an `AsyncResult`.
- *
- * Data-last overload:
- *   Input: R (maybe async), Mapper: (Error<R>) -> F
- *   Output: Result<Ok<R>, F> (async iff R is async)
- *
- * Data-first overload:
- *   Same as above but with `(result, fn)` order.
+ * Maps the `ErrorResult` to a new value.
+ * @param fn Mapper for the `ErrorResult`.
+ * @returns A mapper (data-last) or the mapped `Result`/`AsyncResult` (data-first).
  */
 export const mapError: {
 	// data-last
@@ -290,17 +391,9 @@ export const mapError: {
 });
 
 /**
- * Maps the `Error` value of a `Result` to a new `Result`. The output is async if either:
- *   - the input is async OR
- *   - the mapping function returns an `AsyncResult`.
- *
- * Data-last overload:
- *   Input: R (maybe async)
- *   Mapper: (Error<R>) -> RF (maybe async Result)
- *   Output: Result<Ok<R> | Ok<RF>, Error<RF>> (async iff R or RF is async)
- *
- * Data-first overload:
- *   Same as above but with `(result, fn)` order.
+ * Transforms the `ErrorResult` into another `Result`/`AsyncResult`.
+ * @param fn Mapper from `ErrorResult` to `Result`/`AsyncResult`.
+ * @returns A mapper (data-last) or the resulting `Result`/`AsyncResult` (data-first).
  */
 export const flatMapError: {
 	// data-last
@@ -344,16 +437,9 @@ export const flatMapError: {
 );
 
 /**
- * Recovers from an `Error` by mapping it to a new `Ok` value.
- * Output is async iff input is async.
- *
- * Data-last overload:
- *   Input: R (maybe async)
- *   Mapper: (Error<R>) -> U
- *   Output: Result<Ok<R> | U, never> (async iff R is async)
- *
- * Data-first overload:
- *   Same as above but with `(result, fn)` order.
+ * Converts an `ErrorResult` into an `OkResult`.
+ * @param fn Mapper from `ErrorResult` to replacement `OkResult`.
+ * @returns A mapper (data-last) or a `Result`/`AsyncResult` without `ErrorResult` (data-first).
  */
 export const catchError: {
 	// data-last
@@ -394,8 +480,9 @@ export const catchError: {
 export { catchError as catch };
 
 /**
- * Performs a side-effect with the `Ok` value, returning the original `Result` unchanged.
- * Works for both sync and async transparently.
+ * Runs a side effect on an `OkResult`.
+ * @param onOk Handler to invoke with the `OkResult`.
+ * @returns The original `Result`/`AsyncResult`.
  */
 export const tap: {
 	// data-last
@@ -437,8 +524,9 @@ export const tap: {
 );
 
 /**
- * Performs a side-effect with the `Error` value, returning the original `Result` unchanged.
- * Works for both sync and async transparently.
+ * Runs a side effect on an `ErrorResult`.
+ * @param onError Handler to invoke with the `ErrorResult`.
+ * @returns The original `Result`/`AsyncResult`.
  */
 export const tapError: {
 	// data-last
@@ -480,8 +568,9 @@ export const tapError: {
 );
 
 /**
- * Performs a side-effect on a `Result` (Ok or Error), returning the original `Result` unchanged.
- * Works for both sync and async transparently.
+ * Runs a side effect on either `OkResult` or `ErrorResult`.
+ * @param onFinally Handler to invoke with the full `Result`.
+ * @returns The original `Result`/`AsyncResult`.
  */
 export const tapBoth: {
 	// data-last
@@ -521,12 +610,21 @@ export const tapBoth: {
 	},
 );
 
+export { tapBoth as finally };
+
 /**
  * Unwraps a `Result` by providing handlers for Ok and Error.
  * If the input is async, returns a PromiseLike of the union of handler outputs.
  */
 type MatchReturn<R, V> = R extends PromiseLike<any> ? PromiseLike<V> : V;
 
+/**
+ * Applies the appropriate handler to an `OkResult` or `ErrorResult`
+ * and returns whatever that handler returns.
+ * @param onOk Handler called with the `OkResult` value.
+ * @param onError Handler called with the `ErrorResult` value.
+ * @returns The value returned by either `onOk` or `onError`.
+ */
 export const match: {
 	// data-last
 	<R extends MaybeAsyncResult<any, any>, TValue, TError>(

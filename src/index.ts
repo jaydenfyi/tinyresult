@@ -11,6 +11,7 @@ import {
 	tryCatch as tryCatchFn,
 	all as allFn,
 	from as fromFn,
+	fromPromise as fromPromiseFn,
 	type Result as ResultLike,
 	type MaybeAsyncResult as MaybeAsyncResultLike,
 	type ResolveOkValue,
@@ -35,21 +36,32 @@ type ExtractErrorResultValue<T> = T extends readonly Result<any, infer E>[]
 	? E
 	: never;
 
-// type ResolveResult<R> =
-// 	R extends PromiseLike<infer P>
-// 		? P extends Result<any, any>
-// 			? P
-// 			: never
-// 		: R extends Result<any, any>
-// 			? R
-// 			: never;
-
-// export type ResolveOkValue<R> =
-// 	ResolveResult<R> extends Result<infer T, any> ? T : never;
-// export type ResolveErrorValue<R> =
-// 	ResolveResult<R> extends Result<any, infer E> ? E : never;
-
 // Result types
+
+function wrapFn<F extends (...args: any[]) => any, E = unknown>(
+	fn: F,
+	mapError?: (e: unknown) => E,
+) {
+	return (...args: Parameters<F>) => {
+		try {
+			const out = fn(...args);
+			if (isPromiseLike(out)) {
+				return AsyncResultImplementation.from(
+					Promise.resolve(out).then(
+						(v) => ResultImplementation.ok(v),
+						(e) =>
+							ResultImplementation.error(
+								mapError ? mapError(e) : e,
+							),
+					),
+				);
+			}
+			return ResultImplementation.ok(out);
+		} catch (e) {
+			return ResultImplementation.error(mapError ? mapError(e) : e);
+		}
+	};
+}
 
 export interface ResultPrototype<T, E> {
 	map<U>(callbackFn: (value: T) => PromiseLike<U>): AsyncResult<U, E>;
@@ -60,13 +72,13 @@ export interface ResultPrototype<T, E> {
 	): AsyncResult<U, E | F>;
 	flatMap<U, F = E>(callbackFn: (value: T) => Result<U, F>): Result<U, E | F>;
 
-	mapError<F>(
-		callbackFn: (error: E) => NotPromiseLike<F>,
-	): [E] extends [never] ? Result<T, never> : Result<T, F>;
 	mapError<F>(callbackFn: (error: E) => PromiseLike<F>): AsyncResult<T, F>;
+	mapError<F>(callbackFn: (error: E) => F): Result<T, F>;
+
 	flatMapError<U, F = E>(
 		callbackFn: (error: E) => PromiseLike<Result<U, F>>,
 	): AsyncResult<T | U, F>;
+
 	flatMapError<U, F = E>(
 		callbackFn: (error: E) => Result<U, F>,
 	): Result<T | U, F>;
@@ -82,8 +94,10 @@ export interface ResultPrototype<T, E> {
 	tapError(onError: (error: E) => PromiseLike<unknown>): AsyncResult<T, E>;
 	tapError(onError: (error: E) => unknown): Result<T, E>;
 
-	finally(onFinally: () => PromiseLike<unknown>): AsyncResult<T, E>;
-	finally(onFinally: () => unknown): Result<T, E>;
+	finally(
+		onFinally: (result: Result<T, E>) => PromiseLike<unknown>,
+	): AsyncResult<T, E>;
+	finally(onFinally: (result: Result<T, E>) => unknown): Result<T, E>;
 
 	match<TValue, TError>(
 		onOk: (value: T) => TValue,
@@ -108,13 +122,44 @@ export interface ResultConstructor {
 	): AsyncResult<T, F>;
 	try<T, F>(callbackFn: () => T, onError: (e: unknown) => F): Result<T, F>;
 
+	wrap<F extends (...args: any[]) => PromiseLike<any>, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => AsyncResult<Awaited<ReturnType<F>>, E>;
+	wrap<F extends (...args: any[]) => never, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => Result<never, E>;
+	wrap<F extends (...args: any[]) => any, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => Result<ReturnType<F>, E>;
+
 	all<const T extends readonly ResultLike<any, any>[]>(
 		results: T,
 	): Result<ExtractOkResultValues<T>, ExtractErrorResultValue<T>>;
 
 	from<T, E = unknown>(result: ResultLike<T, E>): Result<T, E>;
 
+	fromPromise<T, E = unknown>(
+		promise: Promise<T>,
+		onError?: (reason: unknown) => E,
+	): AsyncResult<T, E>;
+
 	isResult(result: unknown): result is Result<unknown, unknown>;
+
+	wrap<F extends (...args: any[]) => never, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => Result<never, E>;
+	wrap<F extends (...args: any[]) => PromiseLike<any>, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => AsyncResult<Awaited<ReturnType<F>>, E>;
+	wrap<F extends (...args: any[]) => any, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => Result<ReturnType<F>, E>;
 
 	readonly [Symbol.species]: ResultConstructor;
 
@@ -175,6 +220,19 @@ export interface AsyncResultConstructor {
 		callbackFn: () => T,
 		onError: (e: unknown) => F,
 	): AsyncResult<T, F>;
+
+	wrap<F extends (...args: any[]) => PromiseLike<any>, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => AsyncResult<Awaited<ReturnType<F>>, E>;
+	wrap<F extends (...args: any[]) => never, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => Result<never, E>;
+	wrap<F extends (...args: any[]) => any, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	): (...args: Parameters<F>) => Result<ReturnType<F>, E>;
 
 	all<R extends readonly MaybeAsyncResult<any, any>[]>(
 		results: R,
@@ -261,6 +319,13 @@ export class ResultImplementation<T, E = unknown>
 		return ResultImplementation.from(out);
 	}
 
+	static wrap<F extends (...args: any[]) => any, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	) {
+		return wrapFn(fn, mapError);
+	}
+
 	static all<const T extends readonly ResultLike<any, any>[]>(
 		results: T,
 	): Result<ExtractOkResultValues<T>, ExtractErrorResultValue<T>> {
@@ -284,6 +349,13 @@ export class ResultImplementation<T, E = unknown>
 		return result.ok
 			? ResultImplementation.ok(result.value)
 			: ResultImplementation.error(result.error);
+	}
+
+	static fromPromise<T, E = unknown>(
+		promise: Promise<T>,
+		onError?: (reason: unknown) => E,
+	): AsyncResult<T, E> {
+		return AsyncResultImplementation.from(fromPromiseFn(promise, onError));
 	}
 
 	static isResult(value: unknown): value is Result<unknown, unknown> {
@@ -410,10 +482,12 @@ export class ResultImplementation<T, E = unknown>
 		return ResultImplementation.from(result);
 	}
 
-	finally(onFinally: () => unknown | PromiseLike<unknown>): AsyncResult<T, E>;
-	finally(onFinally: () => unknown): Result<T, E>;
 	finally(
-		onFinally: () => unknown | PromiseLike<unknown>,
+		onFinally: (result: Result<T, E>) => unknown | PromiseLike<unknown>,
+	): AsyncResult<T, E>;
+	finally(onFinally: (result: Result<T, E>) => unknown): Result<T, E>;
+	finally(
+		onFinally: (result: Result<T, E>) => unknown | PromiseLike<unknown>,
 	): MaybeAsyncResult<T, E> {
 		const result = tapBothFn(
 			this as Result<T, E>,
@@ -478,6 +552,13 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 		return AsyncResultImplementation.from(out);
 	}
 
+	static wrap<F extends (...args: any[]) => any, E = unknown>(
+		fn: F,
+		mapError?: (e: unknown) => E,
+	) {
+		return wrapFn(fn, mapError);
+	}
+
 	static all(iterable: readonly any[]): AsyncResult<any, any> {
 		return AsyncResultImplementation.from(
 			allFn(iterable as readonly MaybeAsyncResultLike<any, any>[]),
@@ -498,15 +579,7 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 		promise: Promise<T>,
 		onError?: (reason: unknown) => E,
 	): AsyncResult<T, E> {
-		return AsyncResultImplementation.from(
-			promise.then(
-				(value) => ResultImplementation.ok(value),
-				(reason) =>
-					ResultImplementation.error(
-						onError ? onError(reason) : (reason as E),
-					),
-			),
-		);
+		return AsyncResultImplementation.from(fromPromiseFn(promise, onError));
 	}
 
 	static isAsyncResult(
@@ -580,9 +653,16 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 		);
 	}
 
-	finally(onFinally: () => void | PromiseLike<void>): AsyncResult<T, E> {
+	finally(
+		onFinally: (result: AsyncResult<T, E>) => void | PromiseLike<void>,
+	): AsyncResult<T, E> {
 		return AsyncResultImplementation.from(
-			tapBothFn(this._promise, onFinally),
+			tapBothFn(
+				this._promise,
+				onFinally as unknown as (
+					result: MaybeAsyncResultLike<T, E>,
+				) => void | PromiseLike<void>,
+			),
 		);
 	}
 
@@ -600,4 +680,5 @@ class AsyncResultImplementation<T, E = unknown> implements AsyncResult<T, E> {
 
 export const Result: ResultConstructor =
 	ResultImplementation as unknown as ResultConstructor;
-export const AsyncResult: AsyncResultConstructor = AsyncResultImplementation;
+export const AsyncResult: AsyncResultConstructor =
+	AsyncResultImplementation as unknown as AsyncResultConstructor;

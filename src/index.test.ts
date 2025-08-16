@@ -62,6 +62,15 @@ describe('Result', () => {
 			if (result.ok) throw new Error('Result should be an error');
 			expect(result.error).toBe(error);
 		});
+
+		test('should return an async result when the callback returns a promise', async () => {
+			const result = Result.try(async () => 5);
+			expect(AsyncResult.isAsyncResult(result)).toBe(true);
+			const resolvedResult = await result;
+			expect(resolvedResult.ok).toBe(true);
+			if (!resolvedResult.ok) throw new Error('Result should be ok');
+			expect(resolvedResult.value).toBe(5);
+		});
 	});
 
 	describe('Result.all', () => {
@@ -322,14 +331,17 @@ describe('Result', () => {
 			const result = Result.ok(5)
 				.map((value) => value * 2)
 				.flatMap((value) => Result.ok(value + 3))
-				.mapError((error) => `Error: ${error}` as const)
-				// .tap((value) => console.log(`Value: ${value}`))
-				// .tapError((error) => console.error(`Error: ${error}`))
-				.catch((error) => `Caught: ${error}` as const);
-			// .finally(() => {
-			// 	console.log('Done');
-			// 	// return 'Finalized' as const;
-			// });
+				.mapError((error) => {
+					const errorMessage = `Error: ${error as string}` as const;
+					return errorMessage;
+				})
+				.tap((value) => console.log(`Value: ${value}`))
+				.tapError((error) => console.error(`Error: ${error}`))
+				.catch((error) => `Caught: ${error}` as const)
+				.finally(() => {
+					console.log('Done');
+					// return 'Finalized' as const;
+				});
 			// .match(
 			// 	(value) => `Final value: ${value}` as const,
 			// 	(error) => `Final error: ${error}` as const,
@@ -424,12 +436,15 @@ describe('AsyncResult', () => {
 
 	describe('AsyncResult.all', () => {
 		test('should return an ok AsyncResult with all values if all results are ok', async () => {
-			const results = [
+			const result = await AsyncResult.all([
 				AsyncResult.ok(1),
-				AsyncResult.ok(2),
+				AsyncResult.ok(2).tap(async () => {
+					console.log('this started');
+					await new Promise((resolve) => setTimeout(resolve, 4_000));
+					console.log('this finished');
+				}),
 				AsyncResult.ok(3),
-			] as const;
-			const result = await AsyncResult.all(results);
+			] as const);
 			expect(result.ok).toBe(true);
 			if (!result.ok) throw new Error('Result should be ok');
 			expect(result.value).toEqual([1, 2, 3]);
@@ -564,93 +579,6 @@ describe('AsyncResult', () => {
 			if (!flatMapped.ok) throw new Error('Result should be ok');
 			expect(flatMapped.value).toBe(5);
 		});
-
-		// test('should return an AsyncResult if the flatMap callback returns a promise', async () => {
-		// 	const result = AsyncResult.ok(5);
-		// 	const flatMapped = result
-		// 		.flatMap(async (value) => {
-		// 			console.log('Fetching value...');
-		// 			// wait for 1 second to simulate async operation
-		// 			await new Promise((resolve) => setTimeout(resolve, 3000));
-		// 			console.log('Fetched value.');
-		// 			return AsyncResult.ok(value * 2);
-		// 		})
-		// 		.tap(async (value) => {
-		// 			console.log('Time now: ', new Date().toISOString());
-		// 			await new Promise((resolve) => setTimeout(resolve, 1000));
-		// 			console.log(
-		// 				'Time after 1 second: ',
-		// 				new Date().toISOString(),
-		// 			);
-		// 			console.log(`Tapped value: ${value}`);
-		// 		});
-		// 	expect(AsyncResult.isAsyncResult(flatMapped)).toBe(true);
-		// 	const resolvedResult = await flatMapped;
-		// 	expect(resolvedResult.ok).toBe(true);
-		// 	if (!resolvedResult.ok) throw new Error('Result should be ok');
-		// 	expect(resolvedResult.value).toBe(10);
-		// });
-
-		// test tracking the time passed throughout async chain of operations
-		// test('should track time passed throughout async chain of operations', async () => {
-		// 	const result = AsyncResult.ok({
-		// 		start: new Date().toISOString(),
-		// 		timePassed: [] as number[],
-		// 	})
-		// 		.flatMap(async (value) => {
-		// 			console.log('Fetching value...');
-		// 			value.timePassed.push(
-		// 				new Date().getTime() - new Date(value.start).getTime(),
-		// 			);
-		// 			console.log(value.timePassed);
-		// 			// wait for 1 second to simulate async operation
-		// 			await new Promise((resolve) => setTimeout(resolve, 1000));
-		// 			console.log('Fetched value.');
-		// 			const timePassed =
-		// 				new Date().getTime() - new Date(value.start).getTime();
-		// 			value.timePassed.push(timePassed);
-		// 			console.log(value.timePassed);
-		// 			return AsyncResult.ok(value);
-		// 		})
-		// 		.map(async (value) => {
-		// 			console.log('Mapping value...');
-		// 			// wait for 1 second to simulate async operation
-		// 			await new Promise((resolve) => setTimeout(resolve, 1000));
-		// 			console.log('Mapped value.');
-		// 			const timePassed =
-		// 				new Date().getTime() - new Date(value.start).getTime();
-		// 			value.timePassed.push(timePassed);
-		// 			console.log(value.timePassed);
-		// 			await new Promise((resolve) => setTimeout(resolve, 500));
-		// 			return value;
-		// 		})
-		// 		.tap(async (value) => {
-		// 			console.log(
-		// 				'ms since start:',
-		// 				new Date().getTime() - new Date(value.start).getTime(),
-		// 			);
-		// 			console.log(`Tapped value: ${JSON.stringify(value)}`);
-		// 		})
-		// 		.flatMap(async (value) => {
-		// 			console.log('Finalizing value...');
-		// 			const timePassed =
-		// 				new Date().getTime() - new Date(value.start).getTime();
-		// 			value.timePassed.push(timePassed);
-		// 			return AsyncResult.ok(value);
-		// 		});
-
-		// 	console.log('Unresolved result:', result);
-		// 	expect(AsyncResult.isAsyncResult(result)).toBe(true);
-		// 	const resolvedResult = await result;
-		// 	console.log('Resolved result:', resolvedResult);
-		// 	expect(resolvedResult.ok).toBe(true);
-		// 	if (!resolvedResult.ok) throw new Error('Result should be ok');
-		// 	expect(resolvedResult.value.timePassed.length).toBe(4);
-		// 	expect(resolvedResult.value.timePassed[0]).toBeGreaterThan(0);
-		// 	expect(resolvedResult.value.timePassed[1]).toBeGreaterThan(0);
-		// 	expect(resolvedResult.value.timePassed[2]).toBeGreaterThan(0);
-		// 	console.log('Final value:', resolvedResult.value);
-		// });
 	});
 
 	describe('AsyncResult.prototype.mapError', () => {
